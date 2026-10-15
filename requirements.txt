@@ -1,0 +1,10 @@
+# Vampires VS Werewolves (FIA - CentraleSupélec / Centrale Casablanca)
+# This project uses ONLY the Python Standard Library (Python 3.8+).
+# No external pip dependencies are required.
+#
+# Standard modules utilized:
+# - socket (TCP binary protocol)
+# - sys, os, time, math, random
+# - typing (Type annotations)
+# - xml.etree.ElementTree (Map parsing)
+# - subprocess (Server/client launcher)
