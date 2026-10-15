@@ -42,9 +42,15 @@ class TranspositionEntry:
         self.best_move = best_move
 
 class ApexAlphaBetaAgent:
-    def __init__(self, name: str = "ApexAlphaBeta", max_time_seconds: float = 1.65):
+    def __init__(self, name: str = "ApexAlphaBeta", max_time_seconds: float = 1.65,
+                 enable_foraging_yield: bool = False,
+                 enable_voronoi: bool = False,
+                 enable_quiescence: bool = False):
         self.name = name
         self.max_time = max_time_seconds
+        self.enable_foraging_yield = enable_foraging_yield
+        self.enable_voronoi = enable_voronoi
+        self.enable_quiescence = enable_quiescence
         self.transposition_table: Dict[int, TranspositionEntry] = {}
         self.nodes_searched = 0
         self.start_time = 0.0
@@ -191,8 +197,27 @@ class ApexAlphaBetaAgent:
                     for h_pos, h_cnt in safe_humans:
                         d = chebyshev_dist(my_pos, h_pos)
                         min_ene_d = min(chebyshev_dist(e_pos, h_pos) for e_pos, _ in enemy_groups) if enemy_groups else 99
-                        ratio = 1.3 if d <= min_ene_d else 0.7
-                        pull = (W_HUMAN_PULL * (h_cnt ** 1.1) * ratio) / (d + 1.0)
+
+                        # --- FEATURE 2: VORONOI TEMPORAL FILTER ---
+                        if self.enable_voronoi:
+                            if min_ene_d < d:
+                                # Target strictly inside enemy Voronoi cell: ignore completely
+                                continue
+                            elif d < min_ene_d:
+                                ratio = 1.4  # Safe territory bonus
+                            else:
+                                ratio = 1.0  # Equal distance border contest
+                        else:
+                            ratio = 1.3 if d <= min_ene_d else 0.7
+
+                        # --- FEATURE 1: OPTIMAL FORAGING YIELD ---
+                        if self.enable_foraging_yield:
+                            pull = (W_HUMAN_PULL * h_cnt * ratio) / ((d + 0.5) ** 1.6)
+                            if d == 1:
+                                pull += 8000.0  # Immediate tactical capture bonus
+                        else:
+                            pull = (W_HUMAN_PULL * (h_cnt ** 1.1) * ratio) / (d + 1.0)
+
                         if pull > best_pull:
                             best_pull = pull
                     score += best_pull
@@ -257,7 +282,9 @@ class ApexAlphaBetaAgent:
             return 0.0
 
         if depth == 0:
-            return self.evaluate(state, root_species)
+            if not self.enable_quiescence:
+                return self.evaluate(state, root_species)
+            return self.quiescence_search(state, alpha, beta, maximizing_player, root_species, qdepth=1)
 
         current_species = root_species if maximizing_player else (
             Species.WEREWOLF if root_species == Species.VAMPIRE else Species.VAMPIRE
@@ -341,6 +368,71 @@ class ApexAlphaBetaAgent:
             self.transposition_table[state_hash] = TranspositionEntry(depth, best_score, flag, best_move_found)
 
         return best_score
+
+    # ---------------------------------------------------------
+    # Quiescence Search (Tactical Leaf Stabilization)
+    # ---------------------------------------------------------
+    def quiescence_search(self, state: BoardState, alpha: float, beta: float,
+                           maximizing_player: bool, root_species: Species, qdepth: int = 1) -> float:
+        self.nodes_searched += 1
+        if time.time() - self.start_time > self.max_time:
+            self.time_limit_exceeded = True
+            return 0.0
+
+        stand_pat = self.evaluate(state, root_species)
+        if qdepth <= 0:
+            return stand_pat
+
+        current_species = root_species if maximizing_player else (
+            Species.WEREWOLF if root_species == Species.VAMPIRE else Species.VAMPIRE
+        )
+        our_groups = state.get_species_groups(current_species)
+        enemy_species = Species.WEREWOLF if current_species == Species.VAMPIRE else Species.VAMPIRE
+        enemy_groups = state.get_species_groups(enemy_species)
+
+        # Tactical contact check: are we adjacent (d == 1) to any enemy group?
+        has_contact = any(
+            chebyshev_dist(mp, ep) == 1
+            for mp, _ in our_groups
+            for ep, _ in enemy_groups
+        )
+        if not has_contact:
+            return stand_pat
+
+        if maximizing_player:
+            if stand_pat >= beta:
+                return beta
+            if stand_pat > alpha:
+                alpha = stand_pat
+
+            candidate_moves = self.generate_moves(state, current_species)
+            for move in candidate_moves:
+                child = state.apply_moves(move, current_species, deterministic=True)
+                score = self.quiescence_search(child, alpha, beta, False, root_species, qdepth - 1)
+                if self.time_limit_exceeded:
+                    return 0.0
+                if score >= beta:
+                    return beta
+                if score > alpha:
+                    alpha = score
+            return alpha
+        else:
+            if stand_pat <= alpha:
+                return alpha
+            if stand_pat < beta:
+                beta = stand_pat
+
+            candidate_moves = self.generate_moves(state, current_species)
+            for move in candidate_moves:
+                child = state.apply_moves(move, current_species, deterministic=True)
+                score = self.quiescence_search(child, alpha, beta, True, root_species, qdepth - 1)
+                if self.time_limit_exceeded:
+                    return 0.0
+                if score <= alpha:
+                    return alpha
+                if score < beta:
+                    beta = score
+            return beta
 
     # ---------------------------------------------------------
     # Iterative Deepening Search Root Controller

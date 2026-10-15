@@ -13,7 +13,14 @@ class AIAgent:
     def __init__(self, name: str = "CentraleBot"):
         self.name = name
         # Budget 1.65 seconds to guarantee responding well within the 2.0 second limit
-        self.engine = ApexAlphaBetaAgent(name=name, max_time_seconds=1.65)
+        # Configured with Apex v2: Voronoi dominance + Quiescence leaf stabilization + Optimal foraging
+        self.engine = ApexAlphaBetaAgent(
+            name=name,
+            max_time_seconds=1.65,
+            enable_foraging_yield=True,
+            enable_voronoi=True,
+            enable_quiescence=True
+        )
 
     def _convert_game_state(self, state: GameState) -> BoardState:
         bs = BoardState(state.rows, state.cols)
