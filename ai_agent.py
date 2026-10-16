@@ -1,84 +1,56 @@
-"""
-Starter AI Agent Template for Vampires VS Werewolves
-FIA - CentraleSupélec / Centrale Casablanca
+# connects the MCTS agent (mcts_agent.py) to main.py
+# if something breaks we send a simple legal move so we never miss a turn
 
-Instructions for developers:
-- Implement your decision-making algorithm inside `compute_moves()`.
-- You can create helper methods, heuristics, tree search (Minimax, Alpha-Beta, MCTS, etc.).
-- Respect the protocol constraints:
-    * Respond within 2.0 seconds per turn.
-    * Return a list of tuples: (src_x, src_y, count, dst_x, dst_y)
-    * Destination must be Chebyshev distance 1 (adjacent 8 directions).
-    * Rule 5: A cell cannot be both a source and a destination in the same turn.
-"""
+import time
+from typing import List, Tuple
+from game_state import GameState
+from game_engine import BoardState
+from mcts_agent import MCTSAgent
 
-import random
-from typing import List, Tuple, Optional
-from game_state import GameState, Species
+MAX_PLIES = 200          # MaxPlays in the server config
+
 
 class AIAgent:
-    def __init__(self, name: str = "CentraleBot"):
+    def __init__(self, name: str = "RaceMCTS", max_time_seconds: float = 1.6):
         self.name = name
+        self.brain = MCTSAgent(name=name, max_time_seconds=max_time_seconds)
+        self.turns_played = 0
+
+    def _to_board(self, state: GameState) -> BoardState:
+        # GameState (live board) -> BoardState (fast copy for the search)
+        board = BoardState(state.rows, state.cols, max_turns=MAX_PLIES)
+        board.turn_count = min(MAX_PLIES - 1, 2 * self.turns_played)  # 2 plies per turn
+        for pos, cell in state.board.items():
+            board.set_cell(pos, cell.humans, cell.vampires, cell.werewolves)
+        return board
 
     def compute_moves(self, state: GameState) -> List[Tuple[int, int, int, int, int]]:
-        """
-        Computes the list of moves for the current turn.
-
-        Args:
-            state (GameState): The current game state containing:
-                - state.rows, state.cols : Dimensions of the grid
-                - state.our_species      : Species.VAMPIRE or Species.WEREWOLF
-                - state.enemy_species    : Species.WEREWOLF or Species.VAMPIRE
-                - state.get_our_groups() : List of [((x, y), count), ...]
-                - state.get_enemy_groups(): List of [((x, y), count), ...]
-                - state.get_human_groups(): List of [((x, y), count), ...]
-                - state.get_legal_adjacent_cells((x, y)) : 8-neighborhood cells within board bounds
-
-        Returns:
-            List[Tuple[int, int, int, int, int]]:
-                A list of moves formatted as:
-                [(src_x, src_y, count, dst_x, dst_y), ...]
-        """
-        our_groups = state.get_our_groups()
-        if not our_groups:
+        if not state.get_our_groups():
             return []
-
-        # =========================================================================
-        # TODO: IMPLEMENT YOUR AI STRATEGY HERE!
-        #
-        # Suggestions:
-        # 1. State evaluation heuristic (Material count, territory, distance to humans)
-        # 2. Minimax with Alpha-Beta pruning
-        # 3. Iterative deepening with a time limit (e.g., 1.5 - 1.8 seconds)
-        # 4. Monte Carlo Tree Search (MCTS) or Potential Fields
-        # =========================================================================
-
-        # DEFAULT STARTER BEHAVIOR:
-        # A simple legal move generator that moves your groups towards the closest humans or enemies.
-        moves: List[Tuple[int, int, int, int, int]] = []
-        sources = set(pos for pos, _ in our_groups)
-        chosen_destinations = set()
-
-        human_groups = state.get_human_groups()
-        enemy_groups = state.get_enemy_groups()
-        targets = [pos for pos, _ in human_groups] or [pos for pos, _ in enemy_groups]
-
-        for (src_x, src_y), count in our_groups:
-            src = (src_x, src_y)
-            neighbors = state.get_legal_adjacent_cells(src)
-            
-            # Rule 5: Destination cannot be one of our sources or another group's target
-            valid_destinations = [n for n in neighbors if n not in sources and n not in chosen_destinations]
-            if not valid_destinations:
-                valid_destinations = [n for n in neighbors if n not in sources] or neighbors
-
-            # Move towards the closest target if available
-            if targets:
-                best_dst = min(valid_destinations, key=lambda n: min(state.chebyshev_dist(n, t) for t in targets))
-            else:
-                best_dst = random.choice(valid_destinations)
-
-            chosen_destinations.add(best_dst)
-            moves.append((src_x, src_y, count, best_dst[0], best_dst[1]))
-
+        board = self._to_board(state)
+        try:
+            moves = self.brain.compute_moves(board, state.our_species)
+            valid, reason = board.validate_moves(moves, state.our_species)
+            if not valid:
+                print(f"[AIAgent] Invalid MCTS move ({reason}), using fallback.")
+                moves = self._fallback(state)
+        except Exception as e:
+            print(f"[AIAgent] MCTS error: {e}, using fallback.")
+            moves = self._fallback(state)
+        self.turns_played += 1
+        print(f"[AIAgent] {self.brain.last_iterations} imaginary games this turn")
         return moves
+
+    def _fallback(self, state: GameState) -> List[Tuple[int, int, int, int, int]]:
+        # move the biggest group to any free neighbour
+        groups = state.get_our_groups()
+        sources = {p for p, _ in groups}
+        (x, y), count = max(groups, key=lambda g: g[1])
+        for n in state.get_legal_adjacent_cells((x, y)):
+            if n not in sources:
+                return [(x, y, count, n[0], n[1])]
+        n = state.get_legal_adjacent_cells((x, y))[0]
+        return [(x, y, count, n[0], n[1])]
+
+    def reset(self):
+        self.turns_played = 0

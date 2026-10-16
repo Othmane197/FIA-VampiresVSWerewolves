@@ -8,7 +8,7 @@ def parse_args():
     host = "127.0.0.1"
     port = 5555
     name = "CentraleBot"
-    delay = 0.5  # Default 500ms delay to make moves visible on GUI
+    delay = 0.0  # No delay by default: the server only gives 2s per turn (use --delay to watch)
 
     args = sys.argv[1:]
     if "--name" in args:
@@ -91,6 +91,7 @@ def main():
             elif cmd == "END":
                 print("[Game] Game finished! Awaiting new game...")
                 state.reset_for_new_game()
+                agent.reset()
 
             elif cmd == "BYE":
                 print("[Game] Server instructed BYE. Exiting cleanly.")
