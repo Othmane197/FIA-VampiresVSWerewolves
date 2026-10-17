@@ -112,4 +112,23 @@ for path in ("thetrap.xml", "testmap.xml"):
             b = b.apply_moves(rng.choice(turns), sp, deterministic=False)
             sp = W if sp == V else V
 print(f"OK  {positions} positions from played games: every candidate turn legal")
+
+# 9) A lone group is never FORCED into a bad gamble: 14 vampires next to 20 humans (replayed from a
+#    real lost game) must also get a quiet sidestep, because "stay" is illegal for a single group.
+b = board_from(5, 5, {(2, 2): (0, 14, 0), (1, 1): (20, 0, 0)})
+moves = all_moves(generate_turns(b, V))
+assert (2, 2, 14, 1, 1) in moves                                  # the attack is still offered
+quiet = [m for m in moves if (m[3], m[4]) != (1, 1)]
+assert quiet and all(b.validate_moves([m], V)[0] for m in quiet)
+print("OK  a quiet sidestep is offered next to a bad gamble")
+
+# 10) Approach only goals we are strong enough for: 10 vampires, 20 humans on the east (too many),
+#     4 humans on the west (convertible) -> every approach step goes west.
+b = board_from(11, 11, {(5, 5): (0, 10, 0), (7, 5): (20, 0, 0), (1, 5): (4, 0, 0)})
+moves = all_moves(generate_turns(b, V))
+assert moves and all(m[3] < 5 for m in moves), moves
+# ... but if no goal is convertible, we still approach the nearest one (3 vampires, 20 humans east).
+b = board_from(11, 11, {(5, 5): (0, 3, 0), (8, 5): (20, 0, 0)})
+assert any(m[3] > 5 for m in all_moves(generate_turns(b, V)))
+print("OK  approach steps prefer goals we can beat; fallback when none")
 print("\nAll tests passed.")

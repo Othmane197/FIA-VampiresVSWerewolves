@@ -10,7 +10,10 @@ We keep a short, ranked list built from these ideas (our design, not from the co
  Per group, at most `max_directions` directions, taken in this priority order:
    1. neighbours that hold humans or enemy monsters (immediate battles),
    2. one "flee" neighbour if a nearby enemy group is at least as big as ours,
-   3. one step toward each of the `nearest_goals` nearest goals (human or enemy groups).
+   3. one step toward each of the `nearest_goals` nearest goals (human or enemy groups),
+      considering only goals this group is strong enough for (size <= our count) when any exist,
+   4. if every kept direction is an attack, one quiet sidestep ("wait") so that a bad gamble
+      is never forced (a lone group cannot stay put: Rule 1).
  Per direction, up to two amounts:
    * the whole group, and
    * "just enough" = the smallest force that makes the battle certain
@@ -81,7 +84,11 @@ def _group_options(board: BoardState, pos: Pos, count: int, species: Species,
                         sum((n[0] - p[0]) ** 2 + (n[1] - p[1]) ** 2 for p, _ in threats))
             directions[max(quiet, key=safety)] = ("flee", None, 0)
 
-    for g_pos, g_size, g_humans in sorted(goals, key=lambda g: (_cheb(pos, g[0]), g[0]))[:nearest_goals]:
+    # Only approach goals this group is strong enough for (humans we can convert, enemies we are
+    # not weaker than); if there is none, fall back to all goals.
+    usable = [g for g in goals if g[1] <= count]
+    pool = usable or goals
+    for g_pos, g_size, g_humans in sorted(pool, key=lambda g: (_cheb(pos, g[0]), g[0]))[:nearest_goals]:
         step = (_sign(g_pos[0] - x), _sign(g_pos[1] - y))      # 3. straight step toward the goal
         if step == (0, 0):
             continue
@@ -89,10 +96,25 @@ def _group_options(board: BoardState, pos: Pos, count: int, species: Species,
         if dst not in directions:
             directions[dst] = ("approach", g_humans, g_size)
 
+    chosen = list(directions.items())[:max_directions]
+
+    # 4. Always keep one quiet option: if every kept direction is an attack, add a sidestep to a
+    #    free neighbouring cell, away from the enemy and close to a usable goal. Without it a lone
+    #    group (which cannot "stay": Rule 1) would be forced into a bad gamble.
+    if not any(info[0] != "attack" for _, info in chosen):
+        quiet = [n for n in neighbors if n not in directions]
+
+        def sidestep_key(n):
+            d_enemy = min((_cheb(n, p) for p, _ in enemy_groups), default=99)
+            d_goal = min((_cheb(n, g[0]) for g in pool), default=0)
+            return (-min(d_enemy, 3), d_goal, n)
+        if quiet:
+            chosen.append((min(quiet, key=sidestep_key), ("wait", None, 0)))
+
     options: List[Tuple[tuple, Optional[Move]]] = []
-    for dst, (kind, is_humans, size) in list(directions.items())[:max_directions]:
+    for dst, (kind, is_humans, size) in chosen:
         amounts = [count]
-        if kind != "flee":
+        if kind not in ("flee", "wait"):
             need = needed_force(size, is_humans)
             if 0 < need < count:
                 amounts.append(need)
@@ -104,6 +126,8 @@ def _group_options(board: BoardState, pos: Pos, count: int, species: Species,
                 key = (0, -delta) if delta > 0 else (4, -delta)
             elif kind == "flee":
                 key = (1, 0)
+            elif kind == "wait":
+                key = (3, 1)
             else:
                 key = (2, 0)
             options.append((key, move))
