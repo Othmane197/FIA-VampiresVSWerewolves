@@ -27,3 +27,8 @@ desktop.ini
 
 # Backup files
 *.bak
+
+# Arena: vendored teammate bots and benchmark outputs
+arena/vendor/
+arena/results/
+arena/snapshots/splitter_*/

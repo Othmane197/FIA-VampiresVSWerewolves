@@ -12,11 +12,52 @@ Instructions for developers:
     * Rule 5: A cell cannot be both a source and a destination in the same turn.
 """
 
+import os
 import random
 from typing import List, Tuple, Optional
 from game_state import GameState, Species
 
+
 class AIAgent:
+    """
+    The tournament bot: "The Splitter" (splitter/agent.py, MCTS over joint plans with safe
+    detachments). Any failure falls back to the original starter logic below.
+
+    Environment knobs (optional): SPLITTER_TIME (seconds per move, default 1.5),
+    SPLITTER_VERBOSE=1 (print the search statistics every turn).
+    """
+
+    def __init__(self, name: str = "CentraleBot", time_limit: Optional[float] = None, **kwargs):
+        self.name = name
+        self.starter = StarterAgent(name)
+        if time_limit is None:
+            time_limit = float(os.environ.get("SPLITTER_TIME", "1.5"))
+        try:
+            from splitter import SplitterAgent
+            self.engine = SplitterAgent(name=name, time_limit=time_limit,
+                                        verbose=os.environ.get("SPLITTER_VERBOSE") == "1", **kwargs)
+        except Exception as e:                       # e.g. a file missing on the CTI machine
+            print(f"[AIAgent] Splitter unavailable ({e!r}), using the starter strategy")
+            self.engine = None
+
+    def reset(self):
+        if self.engine is not None:
+            self.engine.reset()
+
+    def compute_moves(self, state: GameState) -> List[Tuple[int, int, int, int, int]]:
+        if self.engine is not None:
+            try:
+                moves = self.engine.compute_moves(state)
+                if moves:
+                    return moves
+            except Exception as e:
+                print(f"[AIAgent] Splitter error {e!r}, using the starter strategy this turn")
+        return self.starter.compute_moves(state)
+
+
+class StarterAgent:
+    """The original starter-kit strategy (walk to the nearest target). Kept as fallback/baseline."""
+
     def __init__(self, name: str = "CentraleBot"):
         self.name = name
 

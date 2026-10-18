@@ -8,7 +8,7 @@ def parse_args():
     host = "127.0.0.1"
     port = 5555
     name = "CentraleBot"
-    delay = 0.5  # Default 500ms delay to make moves visible on GUI
+    delay = 0.0  # No delay by default: the server gives only 2 s per move (use --delay 0.5 to watch)
 
     args = sys.argv[1:]
     if "--name" in args:
@@ -30,6 +30,18 @@ def parse_args():
         port = int(args[0])
 
     return host, port, name, delay
+
+def fallback_moves(state: GameState):
+    """One legal move (biggest group to a free neighbour that is not a source): never send an empty MOV."""
+    groups = state.get_our_groups()
+    if not groups:
+        return []
+    (x, y), count = max(groups, key=lambda g: g[1])
+    cells = state.get_legal_adjacent_cells((x, y))
+    free = [c for c in cells if c not in state.board or state.board[c].is_empty()]
+    nx, ny = (free or cells)[0]
+    return [(x, y, count, nx, ny)]
+
 
 def main():
     host, port, name, delay = parse_args()
@@ -82,7 +94,14 @@ def main():
                     time.sleep(delay)
 
                 start_time = time.time()
-                moves = agent.compute_moves(state)
+                try:
+                    moves = agent.compute_moves(state)
+                except Exception as e:
+                    # never drop the connection (the server counts that as cheating)
+                    print(f"[Error] compute_moves crashed: {e!r} -> fallback move")
+                    moves = []
+                if not moves:
+                    moves = fallback_moves(state)
                 elapsed = time.time() - start_time
                 for x1, y1, cnt, x2, y2 in moves:
                     print(f"[{name}] Move: {cnt} units from ({x1}, {y1}) -> ({x2}, {y2}) (eval: {elapsed*1000:.1f}ms)")
@@ -91,6 +110,8 @@ def main():
             elif cmd == "END":
                 print("[Game] Game finished! Awaiting new game...")
                 state.reset_for_new_game()
+                if hasattr(agent, "reset"):
+                    agent.reset()
 
             elif cmd == "BYE":
                 print("[Game] Server instructed BYE. Exiting cleanly.")
