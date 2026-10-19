@@ -20,6 +20,10 @@ def parse_args():
             name = args[idx + 1]
             args = args[:idx] + args[idx + 2:]
 
+    pregame = "--pregame" in args       # pre-game analysis between MAP and the first UPD (off by default)
+    if pregame:
+        args = [a for a in args if a != "--pregame"]
+
     if "--delay" in args:
         idx = args.index("--delay")
         if idx + 1 < len(args):
@@ -32,7 +36,7 @@ def parse_args():
     elif len(args) == 1:
         port = int(args[0])
 
-    return host, port, name, delay
+    return host, port, name, delay, pregame
 
 def fallback_moves(state: GameState):
     """One legal move (biggest group to a free neighbour that is not a source): never send an empty MOV."""
@@ -48,7 +52,7 @@ def fallback_moves(state: GameState):
 
 def main():
     """Protocol loop: NME, then SET/HUM/HME/MAP to build the state, then answer every UPD with a MOV."""
-    host, port, name, delay = parse_args()
+    host, port, name, delay, pregame = parse_args()
     print(f"=== Starting Vampires VS Werewolves AI Bot: {name} (Delay: {delay}s) ===")
     print(f"Connecting to {host}:{port} ...")
 
@@ -85,6 +89,8 @@ def main():
             elif cmd == "MAP":
                 state.apply_updates(data["changes"])
                 print(f"[Game] Initial MAP loaded ({len(data['changes'])} cells)")
+                if pregame and hasattr(agent, "pregame"):
+                    agent.pregame(state)
                 print("\n=== Initial Board State ===")
                 print(state.render_board())
 

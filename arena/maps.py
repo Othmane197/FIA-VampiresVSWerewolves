@@ -116,6 +116,17 @@ _SPECS = {
         ("close_8x12", 31, 8, 12, 8, 4, 1, 5, None, 4),
         ("close_11x15", 32, 11, 15, 12, 6, 1, 6, 9, 5),
     ],
+    # HOLD-OUT family: fresh seeds and shapes, NEVER used while tuning (anti-overfitting check)
+    "holdout": [
+        ("ho_9x13", 101, 9, 13, 8, 5, 1, 5, None, None),
+        ("ho_12x18", 102, 12, 18, 10, 8, 1, 4, None, None),
+        ("ho_10x24", 103, 10, 24, 12, 7, 2, 7, None, None),
+        ("ho_14x20", 104, 14, 20, 14, 10, 1, 6, 11, None),
+        ("ho_13x17p", 105, 13, 17, 10, 3, 3, 6, 21, None),
+        ("ho_9x11c", 106, 9, 11, 9, 5, 1, 5, 7, 4),
+        ("ho_16x30", 107, 16, 30, 12, 12, 1, 6, None, None),
+        ("ho_11x11", 108, 11, 11, 10, 6, 2, 8, 9, None),
+    ],
     "sparse": [
         ("sparse_12x20", 41, 12, 20, 10, 3, 4, 9, None, None),
     ],
@@ -125,7 +136,8 @@ _cache: Dict[str, List[Tuple[str, State]]] = {}
 
 
 def build_suite(name: str = "all", max_ply: int = 200) -> List[Tuple[str, State]]:
-    """name: 'all', 'given', a family name, or a comma-separated list of map names/families."""
+    """name: 'all' (the 14 tuning maps), 'given', a family name ('holdout' = validation only),
+    or a comma-separated list of map names/families."""
     key = f"{name}:{max_ply}"
     if key in _cache:
         return _cache[key]
@@ -136,8 +148,8 @@ def build_suite(name: str = "all", max_ply: int = 200) -> List[Tuple[str, State]
         for nm, seed, rows, cols, army, pairs, hmin, hmax, center, gap in specs:
             every.append((nm, symmetric_map(seed, rows, cols, army, pairs, hmin, hmax, center, gap, max_ply)))
             families[fam].append(nm)
-    if name == "all":
-        out = every
+    if name == "all":                     # the TUNING maps: never the hold-out family
+        out = [m for m in every if m[0] not in families["holdout"]]
     else:
         wanted = []
         for part in name.split(","):

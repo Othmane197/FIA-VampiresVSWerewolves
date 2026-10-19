@@ -42,6 +42,14 @@ class AIAgent:
             print(f"[AIAgent] Splitter unavailable ({e!r}), using the starter strategy")
             self.engine = None
 
+    def pregame(self, state: GameState) -> None:
+        """Optional pre-game analysis (main.py --pregame): see SplitterAgent.pregame."""
+        if self.engine is not None:
+            try:
+                self.engine.pregame(state, float(os.environ.get("SPLITTER_PREGAME_TIME", "2.5")))
+            except Exception as e:
+                print(f"[AIAgent] pre-game analysis skipped: {e!r}")
+
     def reset(self):
         """Forget the previous game (called by main.py on END)."""
         if self.engine is not None:

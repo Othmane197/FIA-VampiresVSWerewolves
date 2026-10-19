@@ -25,6 +25,7 @@ from .state import State
 
 GAMMA = 0.9          # a house d moves away is worth GAMMA**d of a house next to us
 PROTECTED = ("base", "flee", "regroup", "regroup+go", "hunt")
+PREEMPT_TAGS = ("deny", "ambush", "shield", "tempo")
 
 
 @dataclass
@@ -43,8 +44,12 @@ class PlanConfig:
     gamble: str = "adaptive"       # "never" | "adaptive" (only when behind) | "always"
     max_plans: int = 18
     danger_weight: float = 3.0     # steps of detour accepted to avoid one expected creature loss / size
+    danger_strike_p: float = 0.45  # safe_step: an adjacent enemy is assumed to strike above these odds
     commit_bonus: float = 0.35     # value bonus for keeping last turn's goal (stops oscillation)
     pincer: bool = True            # synchronized multi-group conversion of a house too big for one group
+    hunt_bonus: float = 0.1        # prior bonus of the "hunt" plan (raised against splitting opponents)
+    preempt: str = ""              # pre-emptive families ("deny,ambush,shield,tempo"); off: measured -3.9 pts
+    preempt_min_prob: float = 0.3  # a predicted target must be at least this likely
 
 
 @dataclass
@@ -86,14 +91,14 @@ def straight_path(src: Pos, dst: Pos) -> List[Pos]:
 
 
 def enemy_attack_loss(cell: Pos, count: int,
-                      enemies: Dict[Pos, int]) -> float:
+                      enemies: Dict[Pos, int], strike_p: float = 0.45) -> float:
     """Expected creatures we lose if we stand on `cell` with `count` and the best adjacent enemy
     group attacks us next turn (server rules: any attack is at least a random battle)."""
     worst = 0.0
     for ep, e in enemies.items():
         if cheb(ep, cell) == 1:
             p = win_probability(e, count, False)
-            if p > 0.45 or e >= count:          # rational enemies only take good odds
+            if p > strike_p or e >= count:      # odds at which an enemy is assumed to strike
                 loss = p * count
                 worst = max(worst, loss)
     return worst
@@ -139,7 +144,7 @@ def detachment_safe(src: Pos, k: int, target: Pos, h: int, enemies: Dict[Pos, in
 
 def safe_step(state: State, side: int, src: Pos, count: int, goal: Pos, forbidden: Set[Pos],
               enemies: Dict[Pos, int], danger_weight: float, intend_battle: bool = False,
-              loss_cache: Optional[dict] = None) -> Optional[Pos]:
+              loss_cache: Optional[dict] = None, strike_p: float = 0.45) -> Optional[Pos]:
     """
     Best neighbour of src to walk `count` creatures towards `goal`:
       * never a cell in `forbidden` (rule 5: cells that are sources this turn);
@@ -175,9 +180,9 @@ def safe_step(state: State, side: int, src: Pos, count: int, goal: Pos, forbidde
         elif loss_cache is not None:
             danger = loss_cache.get((n, arrive))
             if danger is None:
-                danger = loss_cache[(n, arrive)] = enemy_attack_loss(n, arrive, enemies)
+                danger = loss_cache[(n, arrive)] = enemy_attack_loss(n, arrive, enemies, strike_p)
         else:
-            danger = enemy_attack_loss(n, arrive, enemies)
+            danger = enemy_attack_loss(n, arrive, enemies, strike_p)
         dist = cheb(n, goal)
         key = (dist + bonus + danger_weight * danger / max(arrive, 1),
                abs(n[0] - goal[0]) + abs(n[1] - goal[1]))
@@ -320,7 +325,7 @@ class _Builder:
                     dst = self.step_cache[key] = safe_step(
                         self.state, self.side, src, count, goal.target, sources, self.enemies,
                         self.cfg.danger_weight, intend_battle=goal.kind == "gamble",
-                        loss_cache=self.loss_cache)
+                        loss_cache=self.loss_cache, strike_p=self.cfg.danger_strike_p)
             if dst is None:
                 continue
             moves[(src, dst)] = moves.get((src, dst), 0) + count
@@ -336,10 +341,12 @@ def _orders_value(orders) -> float:
 
 
 def generate_plans(state: State, side: int, cfg: Optional[PlanConfig] = None,
-                   behind: bool = False, intents: Optional[Dict[Pos, Pos]] = None) -> List[Plan]:
+                   behind: bool = False, intents: Optional[Dict[Pos, Pos]] = None,
+                   predictions=None) -> List[Plan]:
     """
     The short list of joint plans for `side` to move. Never empty while `side` has creatures.
     `intents` = {group cell: goal} chosen last turn (commitment, see PlanConfig.commit_bonus).
+    `predictions` = opponent_model.Predictions (adds the pre-emptive plan families, chapter 11).
     """
     intents = intents or {}
     cfg = cfg or PlanConfig()
@@ -425,7 +432,7 @@ def generate_plans(state: State, side: int, cfg: Optional[PlanConfig] = None,
             hunt_fixed[pos] = kills[0]
     if hunt_fixed:
         orders, _ = assign(set(), hunt_fixed)
-        add(orders, "hunt", 0.1)
+        add(orders, "hunt", cfg.hunt_bonus)
 
     # 5. flee: threatened groups run, others play the base plan
     flee_fixed = {pos: next(g for g in goals_of[pos] if g.kind == "flee")
@@ -433,6 +440,12 @@ def generate_plans(state: State, side: int, cfg: Optional[PlanConfig] = None,
     if flee_fixed:
         orders, _ = assign(set(), flee_fixed)
         add(orders, "flee", sum(g.value for g in flee_fixed.values()))
+
+    # 5b. pre-emptive plans from the opponent model's predicted targets (chapter 11)
+    if predictions is not None and cfg.preempt:
+        for orders, tag, bonus in _preempt_orders(state, side, groups, enemies, goals_of, predictions,
+                                                  cfg, assign):
+            add(orders, tag, bonus)
 
     # 6. gambles (only generated when allowed)
     for pos, cnt in groups[:3]:
@@ -446,7 +459,8 @@ def generate_plans(state: State, side: int, cfg: Optional[PlanConfig] = None,
     plans.sort(key=lambda p: -p.prior)
     # strategic alternatives are never truncated away (a lost game taught us: with 6+ groups the
     # many split/alt variants used to push the only "flee" plan out of the list)
-    protected = [p for p in plans if p.tag in PROTECTED or p.tag.startswith("pincer")]
+    protected = [p for p in plans if p.tag in PROTECTED or p.tag.startswith("pincer")
+                 or p.tag in PREEMPT_TAGS]
     others = [p for p in plans if p not in protected]
     keep = protected + others[:max(0, cfg.max_plans - len(protected))]
     keep.sort(key=lambda p: -p.prior)
@@ -528,6 +542,57 @@ def _split_orders(state, side, pos, cnt, groups, enemies, cfg, assign):
             out.append((orders + [(pos, rest, fixed_rest)] + others, f"split{len(combo)}+go", value_bonus))
         out.append((orders + others, f"split{len(combo)}", value_bonus))
     yield from out
+
+
+def _preempt_orders(state, side, groups, enemies, goals_of, predictions, cfg, assign):
+    """
+    Pre-emptive plans from the opponent model's predicted targets (opponent_model.GoalRecognizer):
+      deny    reach the house an enemy group is heading for before it does;
+      ambush  if we cannot beat it there, arrive right after it converts with >= 1.5x its new size;
+      shield  our group targeted by a bigger enemy group leaves (merge / flee) before it is in range;
+      tempo   our group targeted by a smaller enemy group holds still: the enemy steps next to it
+              and we strike first.
+    Yields (orders, tag, prior bonus). MCTS decides whether any of them is actually good.
+    """
+    wanted = set(cfg.preempt.split(","))
+    mine = state.groups[side]
+    used = set()
+    for gp in predictions.groups.values():
+        if not gp.targets or gp.pos not in enemies:
+            continue
+        (kind, tp), q = gp.targets[0]
+        if q < cfg.preempt_min_prob or tp is None:
+            continue
+        e = enemies[gp.pos]
+        if kind == "H" and tp in state.humans:
+            h = state.humans[tp]
+            eta = cheb(gp.pos, tp)
+            cands = sorted(mine.items(), key=lambda g: cheb(g[0], tp))
+            deny = next(((p, c) for p, c in cands if c >= h and cheb(p, tp) <= eta), None)
+            if deny and "deny" in wanted and (deny[0], tp) not in used:
+                used.add((deny[0], tp))
+                g = Goal("house", tp, h * GAMMA ** cheb(deny[0], tp) + 0.5 * q * e, h)
+                orders, _ = assign(set(), {deny[0]: g})
+                yield orders, "deny", 0.3 * q * (h + e)
+            elif "ambush" in wanted:
+                amb = next(((p, c) for p, c in cands if c >= 1.5 * (e + h) and cheb(p, tp) <= eta + 1), None)
+                if amb and (amb[0], tp) not in used:
+                    used.add((amb[0], tp))
+                    g = Goal("kill", tp, (e + h) * GAMMA ** cheb(amb[0], tp), int(1.5 * (e + h) + 0.999))
+                    orders, _ = assign(set(), {amb[0]: g})
+                    yield orders, "ambush", 0.3 * q * (e + h)
+        elif kind == "U" and tp in mine:
+            c = mine[tp]
+            if e >= c and "shield" in wanted and cheb(gp.pos, tp) <= 4:
+                friends = {p: n for p, n in mine.items() if p != tp}
+                flee = flee_cell(state, tp, c, [gp.pos], friends, enemies)
+                if flee is not None:
+                    orders, _ = assign(set(), {tp: Goal("flee", flee, q * c)})
+                    yield orders, "shield", 0.3 * q * c
+            elif "tempo" in wanted and cheb(gp.pos, tp) == 2 and win_probability(c, e, False) >= 0.5:
+                base = [o for o in assign(set(), {})[0] if o[0] != tp]   # everybody else as usual
+                if base:
+                    yield base, "tempo", 0.3 * q * e
 
 
 def _pincer_orders(state: State, groups, enemies):

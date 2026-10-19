@@ -19,10 +19,12 @@ Variants (for testing ideas against each other), all keyword arguments:
 """
 import random
 import time
+from dataclasses import replace
 from typing import List, Optional, Tuple
 
 from .evaluate import evaluate, material_balance
 from .mcts import MCTS
+from .opponent_model import OpponentModel
 from .planner import PlanConfig, fallback_plan, generate_plans
 from .rules import V, W, check_moves
 from .state import State, side_of_species
@@ -36,7 +38,11 @@ class SplitterAgent:
                  search: str = "mcts", gamble: str = "adaptive", c: float = 0.6,
                  rollout_depth: int = 2, safety_margin: int = 1, max_detachments: int = 3,
                  reserve_ratio: float = 1.0, reserve_radius: int = 6, max_ply: int = 200, game_seconds: Optional[float] = 300.0,
-                 seed: Optional[int] = None, verbose: bool = False, light_tree: bool = False, **extra):
+                 seed: Optional[int] = None, verbose: bool = False, light_tree: bool = False,
+                 opponent_model: bool = False, opp_selection: str = "puct", adapt: bool = True,
+                 map_aware: bool = False, first_move_time: float = 0.0, prior_bias: float = 0.6,
+                 widen_k: float = 2.0, opp_priors: bool = True, opp_eval: bool = True, kite: bool = False,
+                 **extra):
         """Build the plan config (variants via keyword arguments) and the MCTS engine."""
         self.name = name
         self.time_limit = time_limit
@@ -50,8 +56,17 @@ class SplitterAgent:
         for k, v in extra.items():             # any other PlanConfig field, e.g. prize_lock=True
             if hasattr(self.cfg, k):
                 setattr(self.cfg, k, v)
+        # opponent model (HMMs, splitter/opponent_model.py): observes the opponent every turn
+        self.opp_model = OpponentModel() if opponent_model else None
+        self.adapt = adapt and opponent_model         # I5: risk settings follow the opponent's style
+        self.map_aware = map_aware                    # deathball on maps dominated by one prize
+        self.first_move_time = first_move_time        # longer budget for our first turn (arena test of I6)
+        self.pregame_cache = None                     # (board key, moves) computed by pregame()
+        self.base_cfg = replace(self.cfg)
         self.mcts = MCTS(self.cfg, c=c, rollout_depth=rollout_depth, rng=random.Random(seed),
-                         light_tree=light_tree)
+                         light_tree=light_tree, opp_model=self.opp_model, opp_selection=opp_selection,
+                         prior_bias=prior_bias, widen_k=widen_k, opp_priors=opp_priors, opp_eval=opp_eval,
+                         kite=kite)
         self.last_error: Optional[str] = None
         self.last_info: dict = {}
         self.reset()
@@ -61,6 +76,11 @@ class SplitterAgent:
         self.turns = 0
         self.first_call: Optional[float] = None
         self.intents = {}                      # {cell: goal} of the plan we played last turn
+        self.map_checked = False
+        if getattr(self, "base_cfg", None) is not None:
+            self.cfg.splits = self.base_cfg.splits
+        if getattr(self, "opp_model", None) is not None:
+            self.opp_model.reset()
 
     # ------------------------------------------------------------------ interfaces
     def compute_moves(self, game_state) -> List[Move]:
@@ -109,8 +129,18 @@ class SplitterAgent:
         if not mine:
             return []
         moves = None
+        if self.opp_model is not None:
+            try:
+                self.opp_model.observe(state)      # learn from the opponent's last move
+            except Exception as e:
+                self.last_error = f"opponent model: {e!r}"
         try:
-            moves = self._choose(state, side, ply, start)
+            cached = self.pregame_cache
+            self.pregame_cache = None
+            if cached is not None and cached[0] == state.key():
+                moves = list(cached[1])            # I6: decided before the game started
+            else:
+                moves = self._choose(state, side, ply, start)
         except Exception as e:                       # never let a bug drop the connection
             self.last_error = repr(e)
             if self.verbose:
@@ -127,16 +157,31 @@ class SplitterAgent:
             except Exception as e:
                 self.last_error = f"{self.last_error} / fallback: {e!r}"
                 moves = _emergency_move(state, side)
-        return [(int(a), int(b), int(c), int(d), int(e)) for a, b, c, d, e in moves]
+        final = [(int(a), int(b), int(c), int(d), int(e)) for a, b, c, d, e in moves]
+        if self.opp_model is not None:
+            try:
+                self.opp_model.note_our_move(state, side, final)
+            except Exception as e:
+                self.last_error = f"opponent model: {e!r}"
+        return final
 
     def _choose(self, state: State, side: int, ply: int, start: float) -> List[Move]:
         """Decide: evaluate, generate plans (with last turn's intents), search, remember intents."""
         remaining = self._remaining_plies(ply, start)
+        if self.map_aware and not self.map_checked:
+            self.map_checked = True
+            if prize_dominated(state, side):
+                self.cfg.splits = False
+        if self.adapt:
+            self._adapt_settings(state)
         value_now = evaluate(state, side, side, remaining)
         behind = value_now < 0.35 or (remaining < 20 and material_balance(state, side) < 0)
         # keep only intents of groups that still exist where we left them
         intents = {p: t for p, t in self.intents.items() if p in state.groups[side]}
-        plans = generate_plans(state, side, self.cfg, behind=behind, intents=intents)
+        predictions = None
+        if self.opp_model is not None and self.opp_model.history:
+            predictions = self.opp_model.predictions(state, side)
+        plans = generate_plans(state, side, self.cfg, behind=behind, intents=intents, predictions=predictions)
         if not plans:
             return []
         if self.search_mode == "greedy" or len(plans) == 1:
@@ -144,7 +189,10 @@ class SplitterAgent:
             self.intents = dict(best.intents)
             self.last_info = {"mode": "greedy", "plans": len(plans), "tag": best.tag}
             return list(best.moves)
-        budget = self.time_limit - (time.perf_counter() - start) - 0.02
+        limit = self.time_limit
+        if self.first_move_time and self.turns == 1:
+            limit = max(limit, self.first_move_time)
+        budget = limit - (time.perf_counter() - start) - 0.02
         if budget <= 0.01:
             self.intents = dict(plans[0].intents)
             return list(plans[0].moves)
@@ -161,6 +209,57 @@ class SplitterAgent:
                 print(f"     {row[0]:5d} visits  {row[1]:.3f}  {row[2]:12s} {row[3]}")
         self.intents = dict(best.intents)
         return list(best.moves)
+
+
+    def pregame(self, game_state, budget: float = 2.5) -> None:
+        """
+        I6 (flag --pregame, off by default): use the idle time between MAP and the first UPD.
+        Decide the first move on the starting board with a long budget; if our first turn sees
+        exactly that board (we move first) the cached move is played at once.
+        """
+        start = time.perf_counter()
+        side = side_of_species(game_state.our_species) if game_state.our_species else V
+        state = State.from_game_state(game_state, max_ply=self.max_ply)
+        saved = self.time_limit
+        self.time_limit = budget
+        try:
+            moves = self._choose(state, side, 0, start)
+            if moves and check_moves(state.rows, state.cols, state.groups[side], moves)[0]:
+                self.pregame_cache = (state.key(), moves)
+        finally:
+            self.time_limit = saved
+
+    def _adapt_settings(self, state: State) -> None:
+        """
+        I5: adjust risk settings to the observed opponent (after 8 observed turns):
+        passive non-gambler -> bolder splits; aggressive or long-shot gambler -> more caution;
+        an opponent that splits -> hunt its splinters.
+        """
+        cfg, base = self.cfg, self.base_cfg
+        cfg.reserve_radius, cfg.safety_margin, cfg.hunt_bonus = (base.reserve_radius, base.safety_margin,
+                                                                 base.hunt_bonus)
+        t = self.opp_model.tendencies(state)
+        if t["turns"] < 8:
+            return
+        if t["aggression"] < 0.3 and t["longshot"] < 0.05:
+            cfg.reserve_radius = max(3, base.reserve_radius - 2)
+        elif t["aggression"] > 0.5 or t["longshot"] > 0.2:
+            cfg.reserve_radius = base.reserve_radius + 1
+            cfg.safety_margin = base.safety_margin + 1
+        if t["split"] > 0.08:
+            cfg.hunt_bonus = base.hunt_bonus + 0.3
+
+
+def prize_dominated(state: State, side: int, share: float = 0.45) -> bool:
+    """
+    Map-aware strategy (chapter 08): when one house holds >= `share` of all humans and is bigger
+    than our army, concentrating to take it beats splitting (no-split won testmap and the prize maps).
+    """
+    total = state.humans_total()
+    if not total:
+        return False
+    biggest = max(state.humans.values())
+    return biggest >= share * total and biggest > state.total(side)
 
 
 def _emergency_move(state: State, side: int) -> List[Move]:

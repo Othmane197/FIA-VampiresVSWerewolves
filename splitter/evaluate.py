@@ -120,7 +120,8 @@ def _contest(runners, r, hp, size_after, t) -> float:
     return f
 
 
-def exposure(groups: Dict[Pos, int], enemies: Dict[Pos, int], enemy_moves_next: bool) -> float:
+def exposure(groups: Dict[Pos, int], enemies: Dict[Pos, int], enemy_moves_next: bool,
+             strike_p: float = 0.3) -> float:
     """
     Expected creatures lost because enemies can attack these groups soon.
     Lesson from real losses: when two groups are adjacent, the side to move strikes first, and
@@ -138,7 +139,7 @@ def exposure(groups: Dict[Pos, int], enemies: Dict[Pos, int], enemy_moves_next: 
             sure = e >= 1.5 * cnt
             if d == 1:
                 if enemy_moves_next:
-                    risk = p * cnt if p >= 0.3 else 0.0
+                    risk = p * cnt if p >= strike_p else 0.0
                 else:                      # we move first: we can flee or strike, unless cornered
                     risk = 0.25 * cnt if sure else 0.0
             else:                          # d == 2: they can only come adjacent (or we can)
@@ -148,8 +149,9 @@ def exposure(groups: Dict[Pos, int], enemies: Dict[Pos, int], enemy_moves_next: 
     return lost
 
 
-def evaluate(state: State, side: int, to_move: int, remaining_plies: Optional[float] = None) -> float:
-    """P(side wins) estimate in [0, 1]."""
+def evaluate(state: State, side: int, to_move: int, remaining_plies: Optional[float] = None,
+             strike_p: float = 0.3, kite: bool = False) -> float:
+    """P(side wins) estimate in [0, 1]. strike_p = lowest odds at which the enemy strikes (I3)."""
     ours_now = state.groups[side]
     theirs_now = state.groups[1 - side]
     if not ours_now:
@@ -178,7 +180,7 @@ def evaluate(state: State, side: int, to_move: int, remaining_plies: Optional[fl
     a, b = project_race(ours, theirs, humans, head, horizon)
     # the side that just took its immediate gains is the one NOT to move next
     enemy_next = (to_move == side)
-    a -= exposure(ours, theirs, enemy_next)
+    a -= exposure(ours, theirs, enemy_next, strike_p)
     b -= exposure(theirs, ours, not enemy_next)
     a = max(a, 0.1)
     b = max(b, 0.1)
@@ -187,6 +189,10 @@ def evaluate(state: State, side: int, to_move: int, remaining_plies: Optional[fl
     # the closer to the end, the more a lead is a win (a safe lead late in the game cannot be
     # erased without a gamble): steepness grows from 6 to 20
     progress = 1.0 - min(1.0, remaining_plies / max(1, state.max_ply))
+    if kite and not humans:
+        # endgame kiting: with no humans left a lead can only be lost by a fight, so treat it as
+        # nearly decided -> the search keeps its distance instead of risking the lead
+        progress = 1.0
     k = 6.0 + 14.0 * progress
     score = 1.0 / (1.0 + math.exp(-k * x))
     if a >= 1.5 * b:
