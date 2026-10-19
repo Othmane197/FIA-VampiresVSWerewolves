@@ -17,14 +17,14 @@ Splitter variants can be given inline:  "Splitter:splits=0,c=0.8,rollout_depth=0
 import importlib
 import os
 import sys
-from typing import Callable, Dict
+from typing import Any, Callable, Dict, List
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from game_state import Species                  # noqa: E402  (must be the repo's enum)
-from splitter.rules import V                    # noqa: E402
+from game_state import Species
+from splitter.rules import V
 
 VENDOR = os.path.join(ROOT, "arena", "vendor")
 _SHADOWED = ("ai_agent",)                       # module names that exist both here and in a vendor dir
@@ -32,10 +32,11 @@ _loaded: Dict[str, Dict[str, object]] = {}
 
 
 def _species(side: int):
+    """V / W -> game_state.Species."""
     return Species.VAMPIRE if side == V else Species.WEREWOLF
 
 
-def load_vendor(branch: str, modules):
+def load_vendor(branch: str, modules) -> List[Any]:
     """Import `modules` from arena/vendor/<branch> without clashing with the repo's modules."""
     cache = _loaded.setdefault(branch, {})
     missing = [m for m in modules if m not in cache]
@@ -60,27 +61,33 @@ def load_vendor(branch: str, modules):
 
 
 class Bot:
+    """Common interface of every arena bot: reset() and play(state, side) -> moves."""
     name = "bot"
 
     def reset(self):
-        pass
+        """Prepare for a new game."""
 
     def play(self, state, side):
+        """Moves for `side` in `state` (implemented by the adapters)."""
         raise NotImplementedError
 
 
 class GameStateBot(Bot):
-    def __init__(self, name: str, factory: Callable[[], object]):
+    """Adapter for agents with compute_moves(GameState) (repo starter, Dana's bots, AIAgent)."""
+    def __init__(self, name: str, factory: Callable[[], Any]):
+        """Wrap an agent factory; a fresh agent is built for every game."""
         self.name = name
         self.factory = factory
         self.agent = factory()
         self.home = None
 
     def reset(self):
+        """Fresh agent instance for a new game."""
         self.agent = self.factory()
         self.home = None
 
     def play(self, state, side):
+        """Convert the State to a GameState and ask the agent."""
         if self.home is None:
             self.home = next(iter(state.groups[side]))
         gs = state.to_game_state(side, self.home)
@@ -88,33 +95,42 @@ class GameStateBot(Bot):
 
 
 class BoardBot(Bot):
-    def __init__(self, name: str, factory: Callable[[], object]):
+    """Adapter for agents with compute_moves(BoardState, Species) (Othmane's and Ronita's bots)."""
+    def __init__(self, name: str, factory: Callable[[], Any]):
+        """Wrap an agent factory; a fresh agent is built for every game."""
         self.name = name
         self.factory = factory
         self.agent = factory()
 
     def reset(self):
+        """Fresh agent instance for a new game."""
         self.agent = self.factory()
 
     def play(self, state, side):
+        """Convert the State to a BoardState and ask the agent."""
         return self.agent.compute_moves(state.to_board(), _species(side))
 
 
 class SplitterBot(Bot):
+    """Our bot through its fast choose(State, side) interface."""
     def __init__(self, name: str, kwargs: dict):
+        """SplitterAgent with the given keyword arguments (game clock disabled in the arena)."""
         from splitter import SplitterAgent
         self.name = name
         self.kwargs = kwargs
         self.agent = SplitterAgent(name=name, game_seconds=None, **kwargs)
 
     def reset(self):
+        """Forget the previous game."""
         self.agent.reset()
 
     def play(self, state, side):
+        """Moves chosen by the SplitterAgent."""
         return self.agent.choose(state, side)
 
 
 def _parse_value(v: str):
+    """'3' -> 3, '0.5' -> 0.5, 'true' -> True, else the string (for 'Splitter:key=value')."""
     for cast in (int, float):
         try:
             return cast(v)
@@ -125,8 +141,9 @@ def _parse_value(v: str):
 
 # name -> builder(time_limit) ; time_limit is the per-move budget given to search bots
 def _registry() -> Dict[str, Callable[[float], Bot]]:
+    """name -> builder(time_limit) for every non-Splitter bot (teammates' bots are loaded lazily)."""
     def othmane(cls_name, **kw):
-        def make(t):
+        def make(_t):
             (rv,) = load_vendor("Othmane", ["rival_agents"])
             cls = getattr(rv, cls_name)
             return BoardBot(cls_name, lambda: cls(**kw))
@@ -141,7 +158,7 @@ def _registry() -> Dict[str, Callable[[float], Bot]]:
         return BoardBot("RaceMCTS", lambda: mc.MCTSAgent("RaceMCTS", max_time_seconds=t))
 
     def dana(cls_name):
-        def make(t):
+        def make(_t):
             (sp,) = load_vendor("Dana", ["sparring_agents"])
             cls = getattr(sp, cls_name)
             return GameStateBot(cls_name, lambda: cls())
@@ -151,7 +168,7 @@ def _registry() -> Dict[str, Callable[[float], Bot]]:
         (sa,) = load_vendor("Dana", ["search_agent"])
         return GameStateBot("Expecti", lambda: sa.SearchAgent("Expecti", time_limit=t))
 
-    def starter(t):
+    def starter(_t):
         from ai_agent import StarterAgent
         return GameStateBot("Starter", lambda: StarterAgent("Starter"))
 
@@ -191,6 +208,7 @@ VARIANTS = {
 
 
 def bot_names():
+    """Every bot name make_bot() accepts."""
     return sorted(set(_registry()) | set(VARIANTS))
 
 
@@ -198,6 +216,7 @@ class SnapshotBot(SplitterBot):
     """A frozen copy of splitter/ (arena/snapshots/splitter_<version>), see arena/snapshot.py."""
 
     def __init__(self, name: str, version: str, kwargs: dict):
+        """SplitterAgent imported from arena/snapshots/splitter_<version>/."""
         mod = importlib.import_module(f"arena.snapshots.splitter_{version}.agent")
         self.name = name
         self.kwargs = kwargs

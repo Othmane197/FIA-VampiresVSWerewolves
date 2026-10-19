@@ -14,8 +14,9 @@ Instructions for developers:
 
 import os
 import random
-from typing import List, Tuple, Optional
-from game_state import GameState, Species
+from typing import List, Optional, Tuple
+
+from game_state import GameState
 
 
 class AIAgent:
@@ -28,6 +29,7 @@ class AIAgent:
     """
 
     def __init__(self, name: str = "CentraleBot", time_limit: Optional[float] = None, **kwargs):
+        """Create the Splitter engine (time budget from SPLITTER_TIME) and the starter fallback."""
         self.name = name
         self.starter = StarterAgent(name)
         if time_limit is None:
@@ -41,10 +43,12 @@ class AIAgent:
             self.engine = None
 
     def reset(self):
+        """Forget the previous game (called by main.py on END)."""
         if self.engine is not None:
             self.engine.reset()
 
     def compute_moves(self, state: GameState) -> List[Tuple[int, int, int, int, int]]:
+        """Splitter's moves for this turn; the starter strategy if the Splitter fails."""
         if self.engine is not None:
             try:
                 moves = self.engine.compute_moves(state)
@@ -59,6 +63,7 @@ class StarterAgent:
     """The original starter-kit strategy (walk to the nearest target). Kept as fallback/baseline."""
 
     def __init__(self, name: str = "CentraleBot"):
+        """Original starter-kit agent (kept as last-resort fallback and as a baseline opponent)."""
         self.name = name
 
     def compute_moves(self, state: GameState) -> List[Tuple[int, int, int, int, int]]:
@@ -97,7 +102,7 @@ class StarterAgent:
         # DEFAULT STARTER BEHAVIOR:
         # A simple legal move generator that moves your groups towards the closest humans or enemies.
         moves: List[Tuple[int, int, int, int, int]] = []
-        sources = set(pos for pos, _ in our_groups)
+        sources = {pos for pos, _ in our_groups}
         chosen_destinations = set()
 
         human_groups = state.get_human_groups()

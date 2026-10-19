@@ -10,10 +10,9 @@ State.apply(side, moves) resolves a turn exactly like Board.PerformMoves on the 
 creatures leave their sources, moves are grouped by destination and summed, then each
 destination is resolved (merge / convert / kill / random battle).
 """
-import random as _random
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, Optional, Sequence, Tuple
 
-from .rules import MAX_CELL, V, W, Move, Pos, cheb, other, resolve_battle
+from .rules import MAX_CELL, Move, Pos, V, W, resolve_battle
 
 _NEIGHBORS: Dict[Tuple[int, int], Dict[Pos, Tuple[Pos, ...]]] = {}
 _DIRS = ((-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1))
@@ -34,11 +33,13 @@ def neighbors_table(rows: int, cols: int) -> Dict[Pos, Tuple[Pos, ...]]:
 
 
 class State:
-    __slots__ = ("rows", "cols", "humans", "groups", "ply", "max_ply", "nbrs")
+    """Board position: humans, both species' groups, ply counter. Cheap to copy, exact to update."""
+    __slots__ = ("cols", "groups", "humans", "max_ply", "nbrs", "ply", "rows")
 
     def __init__(self, rows: int, cols: int, humans: Optional[Dict[Pos, int]] = None,
                  vampires: Optional[Dict[Pos, int]] = None, werewolves: Optional[Dict[Pos, int]] = None,
                  ply: int = 0, max_ply: int = 200):
+        """Build a state from {pos: count} dictionaries."""
         self.rows = rows
         self.cols = cols
         self.humans = dict(humans or {})
@@ -49,6 +50,7 @@ class State:
 
     # ------------------------------------------------------------------ basics
     def copy(self) -> "State":
+        """Independent copy (the dictionaries are copied, the neighbour table is shared)."""
         s = State.__new__(State)
         s.rows = self.rows
         s.cols = self.cols
@@ -60,12 +62,15 @@ class State:
         return s
 
     def total(self, side: int) -> int:
+        """Total number of creatures of one side."""
         return sum(self.groups[side].values())
 
     def humans_total(self) -> int:
+        """Total number of humans left on the board."""
         return sum(self.humans.values())
 
     def is_terminal(self) -> bool:
+        """Game over: a species is wiped out or the ply limit is reached."""
         return (not self.groups[V]) or (not self.groups[W]) or self.ply >= self.max_ply
 
     def winner(self) -> Optional[int]:
@@ -78,10 +83,12 @@ class State:
         return None
 
     def key(self) -> tuple:
+        """Hashable snapshot of the position (used in tests to compare states)."""
         return (tuple(sorted(self.humans.items())), tuple(sorted(self.groups[0].items())),
                 tuple(sorted(self.groups[1].items())))
 
     def __repr__(self) -> str:
+        """Readable one-line description for debugging."""
         return (f"State({self.rows}x{self.cols} ply={self.ply} H={self.humans} "
                 f"V={self.groups[V]} W={self.groups[W]})")
 
@@ -160,6 +167,7 @@ class State:
                                 board.turn_count if ply is None else ply, board.max_turns)
 
     def to_board(self):
+        """Convert to game_engine.BoardState (the teammates' search board)."""
         from game_engine import BoardState
         b = BoardState(self.rows, self.cols, self.max_ply)
         b.turn_count = self.ply
@@ -169,6 +177,7 @@ class State:
         return b
 
     def to_game_state(self, side: int, home: Optional[Pos] = None):
+        """Convert to game_state.GameState, as main.py would hold it for `side`."""
         from game_state import Cell, GameState, Species
         gs = GameState()
         gs.set_grid(self.rows, self.cols)

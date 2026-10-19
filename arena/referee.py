@@ -12,7 +12,7 @@ import random
 import time
 import traceback
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional
 
 from splitter.rules import V, W, check_moves, other
 from splitter.state import State
@@ -20,6 +20,7 @@ from splitter.state import State
 
 @dataclass
 class SideStats:
+    """Per-side statistics of one game: decision times, problems, split turns, max groups."""
     times: List[float] = field(default_factory=list)
     timeouts: int = 0
     illegal: int = 0
@@ -31,6 +32,7 @@ class SideStats:
 
 @dataclass
 class GameResult:
+    """Outcome of one game: winner, length, final totals, end reason, stats and move log."""
     winner: Optional[int]      # V / W / None (draw)
     plies: int
     totals: tuple              # (vampires, werewolves) at the end
@@ -40,8 +42,9 @@ class GameResult:
     log: List[str] = field(default_factory=list)
 
 
-def play_game(initial: State, bots: Dict[int, object], first: int = V, seed: Optional[int] = None,
+def play_game(initial: State, bots: Mapping[int, Any], first: int = V, seed: Optional[int] = None,
               hard_limit: float = 2.0, verbose: bool = False, render=None) -> GameResult:
+    """Play one full game between two bots with the real server's rules (see module docstring)."""
     rng = random.Random(seed)
     if seed is not None:
         random.seed(seed)                   # some bots use the global random module
@@ -82,7 +85,7 @@ def play_game(initial: State, bots: Dict[int, object], first: int = V, seed: Opt
             to_move = other(to_move)
             continue
         try:
-            moves = [tuple(int(v) for v in m) for m in (moves or [])]
+            moves = [(int(a), int(b), int(c), int(d), int(e)) for a, b, c, d, e in (moves or [])]
             ok, why = check_moves(state.rows, state.cols, state.groups[to_move], moves)
         except Exception as e:
             ok, why = False, f"malformed moves {moves!r}: {e!r}"

@@ -25,10 +25,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from arena.maps import build_suite, render              # noqa: E402
-from arena.opponents import PANEL, make_bot              # noqa: E402
-from arena.referee import play_game                      # noqa: E402
-from splitter.rules import V, W                          # noqa: E402
+from arena.maps import build_suite, render
+from arena.opponents import PANEL, make_bot
+from arena.referee import play_game
+from splitter.rules import V, W
 
 FIELDS = ["bot", "opp", "map", "side", "first", "seed", "score", "margin", "plies", "reason",
           "our_max_s", "our_avg_s", "our_timeouts", "our_illegal", "our_crashes", "our_splits",
@@ -36,6 +36,7 @@ FIELDS = ["bot", "opp", "map", "side", "first", "seed", "score", "margin", "plie
 
 
 def _play_task(task):
+    """Worker: play one game (bot vs opponent on a map and side) and return its CSV row."""
     bot_spec, opp, map_name, maps_arg, side, first, seed, t, hard, max_ply, log_dir = task
     state = dict(build_suite(maps_arg, max_ply))[map_name]
     ours = make_bot(bot_spec, t)
@@ -68,6 +69,7 @@ def _play_task(task):
 
 
 def _score(rows):
+    """Win rate (win 1, draw 0.5) with its standard error."""
     n = len(rows)
     if not n:
         return 0.0, 0.0, 0
@@ -76,6 +78,7 @@ def _score(rows):
 
 
 def report(rows, title=""):
+    """Print the results grouped by opponent, map, our side and first player."""
     p, se, n = _score(rows)
     print(f"\n=== {title}  {n} games  OVERALL {100 * p:5.1f}% +- {100 * se:.1f} ===")
     for key, label in (("opp", "opponent"), ("map", "map"), ("side", "our side"), ("first", "first player")):
@@ -102,6 +105,7 @@ def report(rows, title=""):
 
 
 def main():
+    """Command line: build every (opponent, map, side, game) task, run them in parallel, report."""
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--bot", default="Splitter")
     ap.add_argument("--opp", nargs="*", default=None, help=f"default: {' '.join(PANEL)}")
@@ -121,7 +125,7 @@ def main():
     hard = a.hard if a.hard is not None else a.time + 1.0
 
     if a.watch:
-        name, state = suite[0]
+        _, state = suite[0]
         bots = {V: make_bot(a.bot, a.time), W: make_bot(opps[0], a.time)}
         print(render(state))
         r = play_game(state, bots, seed=a.seed, hard_limit=hard, verbose=True, render=render)

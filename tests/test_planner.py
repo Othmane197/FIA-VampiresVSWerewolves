@@ -6,8 +6,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from splitter.planner import (PlanConfig, detachment_safe, fallback_plan, generate_plans,
-                              quick_plan, safe_step)
+from splitter.planner import PlanConfig, detachment_safe, fallback_plan, generate_plans, quick_plan, safe_step
 from splitter.rules import V, W, check_moves
 from splitter.state import State
 

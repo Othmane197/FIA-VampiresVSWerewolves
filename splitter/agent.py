@@ -31,11 +31,13 @@ Move = Tuple[int, int, int, int, int]
 
 
 class SplitterAgent:
+    """The tournament bot: planner + MCTS under a strict time budget, with a legal-move guarantee."""
     def __init__(self, name: str = "Splitter", time_limit: float = 1.5, splits: bool = True,
                  search: str = "mcts", gamble: str = "adaptive", c: float = 0.6,
                  rollout_depth: int = 2, safety_margin: int = 1, max_detachments: int = 3,
                  reserve_ratio: float = 1.0, reserve_radius: int = 6, max_ply: int = 200, game_seconds: Optional[float] = 300.0,
                  seed: Optional[int] = None, verbose: bool = False, light_tree: bool = False, **extra):
+        """Build the plan config (variants via keyword arguments) and the MCTS engine."""
         self.name = name
         self.time_limit = time_limit
         self.search_mode = search
@@ -45,6 +47,9 @@ class SplitterAgent:
         self.cfg = PlanConfig(splits=splits, gamble=gamble, safety_margin=safety_margin,
                               max_detachments=max_detachments, reserve_ratio=reserve_ratio,
                               reserve_radius=reserve_radius)
+        for k, v in extra.items():             # any other PlanConfig field, e.g. prize_lock=True
+            if hasattr(self.cfg, k):
+                setattr(self.cfg, k, v)
         self.mcts = MCTS(self.cfg, c=c, rollout_depth=rollout_depth, rng=random.Random(seed),
                          light_tree=light_tree)
         self.last_error: Optional[str] = None
@@ -59,6 +64,7 @@ class SplitterAgent:
 
     # ------------------------------------------------------------------ interfaces
     def compute_moves(self, game_state) -> List[Move]:
+        """main.py interface: moves for the GameState kept from the server messages."""
         start = time.perf_counter()
         if self.first_call is None:
             self.first_call = start
@@ -73,18 +79,21 @@ class SplitterAgent:
         return self._safe_choose(state, side, ply, start)
 
     def compute_moves_board(self, board, species) -> List[Move]:
+        """Othmane's / Ronita's interface: moves for a BoardState and a Species."""
         start = time.perf_counter()
         state = State.from_board(board)
         self.turns += 1
         return self._safe_choose(state, side_of_species(species), state.ply, start)
 
     def choose(self, state: State, side: int, ply: Optional[int] = None) -> List[Move]:
+        """Arena interface: moves for a splitter State (fastest, true ply known)."""
         start = time.perf_counter()
         self.turns += 1
         return self._safe_choose(state, side, state.ply if ply is None else ply, start)
 
     # ------------------------------------------------------------------ core
     def _remaining_plies(self, ply: int, now: float) -> float:
+        """Plies left, from the ply cap and from the game clock (whichever ends first)."""
         remaining = self.max_ply - ply
         if self.game_seconds and self.first_call is not None and ply >= 10:
             elapsed = now - self.first_call
@@ -94,6 +103,7 @@ class SplitterAgent:
         return max(1.0, remaining)
 
     def _safe_choose(self, state: State, side: int, ply: int, start: float) -> List[Move]:
+        """Never-fail wrapper: search, then validate, then fallbacks; always returns legal moves."""
         state.ply = ply
         mine = state.groups[side]
         if not mine:
@@ -117,9 +127,10 @@ class SplitterAgent:
             except Exception as e:
                 self.last_error = f"{self.last_error} / fallback: {e!r}"
                 moves = _emergency_move(state, side)
-        return [tuple(int(v) for v in m) for m in moves]
+        return [(int(a), int(b), int(c), int(d), int(e)) for a, b, c, d, e in moves]
 
     def _choose(self, state: State, side: int, ply: int, start: float) -> List[Move]:
+        """Decide: evaluate, generate plans (with last turn's intents), search, remember intents."""
         remaining = self._remaining_plies(ply, start)
         value_now = evaluate(state, side, side, remaining)
         behind = value_now < 0.35 or (remaining < 20 and material_balance(state, side) < 0)
@@ -140,15 +151,14 @@ class SplitterAgent:
         top = max(p.prior for p in plans) or 1.0
         for p in plans:
             p.prior = max(0.0, p.prior / top) if top > 0 else 0.0
-        best = self.mcts.search(state, side, budget, remaining, behind, root_plans=list(plans))
+        best = self.mcts.search(state, side, budget, remaining, behind, root_plans=list(plans)) or plans[0]
         self.last_info = {"mode": "mcts", "plans": len(plans), "iterations": self.mcts.iterations,
-                          "tag": best.tag if best else None, "value": value_now, "behind": behind}
+                          "tag": best.tag, "value": value_now, "behind": behind}
         if self.verbose:
             print(f"[{self.name}] ply {ply} value {value_now:.2f} iters {self.mcts.iterations} "
                   f"-> {best.tag} {best.moves}")
             for row in self.mcts.root_stats()[:5]:
                 print(f"     {row[0]:5d} visits  {row[1]:.3f}  {row[2]:12s} {row[3]}")
-        best = best or plans[0]
         self.intents = dict(best.intents)
         return list(best.moves)
 

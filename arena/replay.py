@@ -12,13 +12,14 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from arena.maps import build_suite, render     # noqa: E402
-from arena.opponents import make_bot           # noqa: E402
-from arena.referee import play_game            # noqa: E402
-from splitter.rules import V, W                # noqa: E402
+from arena.maps import build_suite, render
+from arena.opponents import make_bot
+from arena.referee import play_game
+from splitter.rules import V, W
 
 
 def main():
+    """Command line: replay one game verbosely, optionally with the board after every ply."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--bot", default="Splitter")
     ap.add_argument("--opp", default="Apex")

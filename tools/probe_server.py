@@ -23,12 +23,15 @@ LOCK = threading.Lock()
 
 
 def log(who, msg):
+    """Thread-safe timestamped print."""
     with LOCK:
         print(f"[{time.time() - T0:7.2f}s] {who:6s} {msg}", flush=True)
 
 
 class ProbeClient:
+    """Scripted client used to probe the real server's rules (moves fixed in advance)."""
     def __init__(self, name, host, port, script, late_turns=None, raw_turns=None):
+        """Client with a script {turn: moves}, optional late answers and raw byte answers."""
         self.name = name
         self.host, self.port = host, port
         self.script = script              # {my_turn_index: [moves]}
@@ -39,9 +42,10 @@ class ProbeClient:
         self.species = None               # 1 = vampires column, 2 = werewolves column
         self.rows = self.cols = 0
         self.turn = 0
-        self.sock = None
+        self.sock: socket.socket = None  # type: ignore[assignment]  (set in run())
 
     def recv_exact(self, n):
+        """Read exactly n bytes from the server."""
         buf = b""
         while len(buf) < n:
             chunk = self.sock.recv(n - len(buf))
@@ -51,12 +55,14 @@ class ProbeClient:
         return buf
 
     def send_moves(self, moves):
+        """Send a MOV message."""
         payload = b"MOV" + bytes([len(moves)])
         for m in moves:
             payload += struct.pack("5B", *m)
         self.sock.sendall(payload)
 
     def fallback_move(self):
+        """A simple legal move when the script has nothing for this turn."""
         ours = [(p, c[self.species]) for p, c in self.board.items() if c[self.species] > 0]
         srcs = {p for p, _ in ours}
         (x, y), n = max(ours, key=lambda g: g[1])
@@ -69,6 +75,7 @@ class ProbeClient:
         return [(x, y, n, x + 1 if x + 1 < self.cols else x - 1, y)]
 
     def run(self):
+        """Connect, then log every server message and answer every UPD."""
         self.sock = socket.create_connection((self.host, self.port))
         name = self.name.encode()
         self.sock.sendall(b"NME" + bytes([len(name)]) + name)
@@ -116,6 +123,7 @@ class ProbeClient:
             self.sock.close()
 
     def play(self):
+        """Answer one UPD: scripted move, late answer or raw bytes."""
         t = self.turn
         self.turn += 1
         if t in self.late_turns:
@@ -158,6 +166,7 @@ SCENARIOS = {
 
 
 def main():
+    """Command line: run one probe scenario with two clients."""
     scenario = sys.argv[1] if len(sys.argv) > 1 else "rules"
     host = sys.argv[2] if len(sys.argv) > 2 else "127.0.0.1"
     port = int(sys.argv[3]) if len(sys.argv) > 3 else 5555

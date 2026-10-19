@@ -12,7 +12,7 @@ Differences with the PDF that matter:
   * the cell counts are bytes (> 255 wraps around), so we never build a cell above 255.
 """
 import random as _random
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, Optional, Sequence, Tuple
 
 V, W = 0, 1
 Pos = Tuple[int, int]
@@ -21,6 +21,7 @@ MAX_CELL = 255
 
 
 def other(side: int) -> int:
+    """The opposite side: V <-> W."""
     return 1 - side
 
 
@@ -32,7 +33,7 @@ def cheb(a: Pos, b: Pos) -> int:
         dx = -dx
     if dy < 0:
         dy = -dy
-    return dx if dx > dy else dy
+    return max(dy, dx)
 
 
 def win_probability(e1: int, e2: int, humans: bool) -> float:
@@ -53,6 +54,7 @@ def is_sure_win(e1: int, e2: int, humans: bool) -> bool:
 
 
 def binomial(n: int, p: float, rng) -> int:
+    """Number of successes among n independent trials of probability p (server dice)."""
     if p >= 1.0:
         return n
     if p <= 0.0:

@@ -25,6 +25,7 @@ FILES = {
 
 
 def fetch(do_git_fetch: bool = False) -> None:
+    """Copy the teammates' agent files from their origin/<branch> into arena/vendor/<branch>/."""
     if do_git_fetch:
         subprocess.run(["git", "fetch", "--all", "-q"], cwd=ROOT, check=False)
     for branch, files in FILES.items():
@@ -32,14 +33,14 @@ def fetch(do_git_fetch: bool = False) -> None:
         os.makedirs(dst_dir, exist_ok=True)
         for f in files:
             res = subprocess.run(["git", "show", f"origin/{branch}:{f}"], cwd=ROOT,
-                                 capture_output=True)
+                                 capture_output=True, check=False)
             if res.returncode != 0:
                 print(f"  !! {branch}:{f} not found ({res.stderr.decode(errors='replace').strip()})")
                 continue
             with open(os.path.join(dst_dir, f), "wb") as out:
                 out.write(res.stdout)
         rev = subprocess.run(["git", "rev-parse", "--short", f"origin/{branch}"], cwd=ROOT,
-                             capture_output=True, text=True).stdout.strip()
+                             capture_output=True, text=True, check=False).stdout.strip()
         with open(os.path.join(dst_dir, "REVISION"), "w") as out:
             out.write(rev + "\n")
         print(f"  {branch:8s} @ {rev}: {', '.join(files)}")

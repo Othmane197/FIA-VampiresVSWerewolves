@@ -26,6 +26,7 @@ GIVEN = ["thetrap.xml", "testmap.xml"]          # testmap2.xml is identical to t
 
 
 def load_xml(path: str, max_ply: int = 200) -> State:
+    """Read a server map file (XML) into a State."""
     if not os.path.isabs(path):
         path = os.path.join(ROOT, path)
     root = ET.parse(path).getroot()
@@ -33,13 +34,14 @@ def load_xml(path: str, max_ply: int = 200) -> State:
     v: Dict = {}
     w: Dict = {}
     for e in root:
-        pos = (int(e.get("X")), int(e.get("Y")))
-        n = int(e.get("Count"))
+        pos = (int(e.attrib["X"]), int(e.attrib["Y"]))
+        n = int(e.attrib["Count"])
         {"Humans": h, "Vampires": v, "Werewolves": w}[e.tag][pos] = n
-    return State(int(root.get("Rows")), int(root.get("Columns")), h, v, w, 0, max_ply)
+    return State(int(root.attrib["Rows"]), int(root.attrib["Columns"]), h, v, w, 0, max_ply)
 
 
 def write_xml(state: State, path: str) -> None:
+    """Save a State as a server map file, so the real GUI can load it."""
     lines = ['<?xml version="1.0" encoding="utf-8" ?>',
              f'<Map Rows="{state.rows}" Columns="{state.cols}">']
     for pos, n in sorted(state.humans.items()):
@@ -54,15 +56,18 @@ def write_xml(state: State, path: str) -> None:
 
 
 def _cheb(a, b):
+    """King-move distance (local copy, keeps this module independent)."""
     return max(abs(a[0] - b[0]), abs(a[1] - b[1]))
 
 
 def symmetric_map(seed: int, rows: int, cols: int, army: int, n_pairs: int, hmin: int, hmax: int,
                   center: Optional[int] = None, start_gap: Optional[int] = None,
                   max_ply: int = 200) -> State:
+    """Random point-symmetric map: mirrored starts and mirrored houses of equal size."""
     rng = random.Random(seed)
     mirror = lambda p: (cols - 1 - p[0], rows - 1 - p[1])
     gap = start_gap if start_gap is not None else max(3, (min(rows, cols) * 2) // 3)
+    v, w = (0, 0), mirror((0, 0))
     for _ in range(10000):
         v = (rng.randrange(cols), rng.randrange(rows))
         w = mirror(v)

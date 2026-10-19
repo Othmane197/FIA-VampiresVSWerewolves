@@ -26,11 +26,12 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from splitter.rules import V, W, check_moves, other     # noqa: E402
-from splitter.state import State                        # noqa: E402
+from splitter.rules import V, W, check_moves, other
+from splitter.state import State
 
 
 def _recv_exact(sock: socket.socket, n: int, deadline: Optional[float] = None) -> bytes:
+    """Read exactly n bytes from the socket (optionally before a deadline)."""
     buf = b""
     while len(buf) < n:
         if deadline is not None:
@@ -48,8 +49,10 @@ def _recv_exact(sock: socket.socket, n: int, deadline: Optional[float] = None) -
 
 
 class FakeServer:
+    """One-game headless server with the real protocol, rules, time limit and cheating checks."""
     def __init__(self, state: State, port: int = 0, move_timeout: float = 2.0, seed: Optional[int] = None,
                  log=print):
+        """Listen on 127.0.0.1:port (0 = any free port) for a game on `state`."""
         self.initial = state
         self.move_timeout = move_timeout
         self.rng = random.Random(seed)
@@ -63,6 +66,7 @@ class FakeServer:
 
     # ------------------------------------------------------------------ protocol
     def _cells(self, state: State, coords) -> bytes:
+        """Encode cells as the protocol's 5-byte tuples (x, y, humans, vampires, werewolves)."""
         out = bytearray()
         for (x, y) in coords:
             out += struct.pack("5B", x, y, state.humans.get((x, y), 0),
@@ -70,10 +74,12 @@ class FakeServer:
         return bytes(out)
 
     def _send_upd(self, sock, cmd: str, state: State, coords) -> None:
+        """Send a MAP or UPD message with the given cells."""
         coords = list(coords)
         sock.sendall(cmd.encode() + bytes([len(coords)]) + self._cells(state, coords))
 
     def run(self) -> dict:
+        """Accept 2 players, play the whole game, send END and BYE, return the result."""
         state = self.initial.copy()
         state.ply = 0
         homes = {V: next(iter(state.groups[V])), W: next(iter(state.groups[W]))}
@@ -135,7 +141,8 @@ class FakeServer:
                 stats["cheat"] = (names[player], f"connection/protocol: {e!r}")
                 winner, reason = other(side), "cheat"
                 break
-            moves = [tuple(raw[5 * i:5 * i + 5]) for i in range(hdr[3])]
+            moves = [struct.unpack_from("5B", raw, 5 * i) for i in range(hdr[3])]
+            moves = [(a, b, c, d, e) for a, b, c, d, e in moves]
             ok, why = check_moves(state.rows, state.cols, state.groups[side], moves)
             if not ok:
                 stats["cheat"] = (names[player], why)
@@ -169,6 +176,7 @@ class FakeServer:
 
 
 def main():
+    """Command line: run the fake server on a map file."""
     from arena.maps import load_xml
     ap = argparse.ArgumentParser()
     ap.add_argument("--map", default="testmap.xml")

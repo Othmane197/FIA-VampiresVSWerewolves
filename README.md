@@ -5,6 +5,22 @@ A clean, lightweight, and complete Python template to connect to the official ga
 
 ---
 
+## 🔀 This branch: "The Splitter" (MCTS + safe splitting)
+
+`main.py` now plays **The Splitter** (`ai_agent.AIAgent` → [`splitter/`](splitter/)). Full strategy documentation (every algorithm, script and function): [docs/strategy/](docs/strategy/README.md). Real-server rules (probed and disassembled, with differences from the PDF): [docs/SERVER_FINDINGS.md](docs/SERVER_FINDINGS.md).
+
+```bash
+python main.py <IP> <PORT> --name MyTeam                 # tournament (1.5 s/move; SPLITTER_TIME=1.2 to change)
+python -m unittest discover tests                        # 24 tests incl. end-to-end protocol vs tools/fake_server.py
+python tools/gen_function_index.py --check               # docs/strategy line links still match the code
+python -m arena.fetch_opponents                          # copy teammates' bots from their branches (once)
+python -m arena.run --games 2 --time 0.2                 # benchmark vs the panel on 14 maps, both species
+python -m arena.run --bot Splitter-nosplit --opp Apex    # variants / ablations ("Splitter:c=0.8,gamble=never")
+python tools/play_bot.py Apex 127.0.0.1 5555             # any arena bot on the real server GUI
+```
+
+---
+
 ## 🚀 Quick Start
 
 ### 1. Requirements

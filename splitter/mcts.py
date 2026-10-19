@@ -15,6 +15,7 @@ Monte Carlo Tree Search over joint plans (planner.generate_plans), for the Split
 import math
 import random
 import time
+from dataclasses import replace
 from typing import List, Optional
 
 from .evaluate import evaluate
@@ -24,13 +25,15 @@ from .state import State
 
 
 class Node:
-    __slots__ = ("plan", "mover", "parent", "children", "untried", "visits", "value", "prior")
+    """One node of the open-loop tree: the plan that leads to it, statistics, children."""
+    __slots__ = ("children", "mover", "parent", "plan", "prior", "untried", "value", "visits")
 
     def __init__(self, plan: Optional[Plan], mover: Optional[int], parent: Optional["Node"], prior: float = 0.0):
+        """New node reached by `mover` playing `plan`; prior = the plan's normalized prior."""
         self.plan = plan
         self.mover = mover            # side that played `plan` to reach this node
         self.parent = parent
-        self.children: List["Node"] = []
+        self.children: List[Node] = []
         self.untried: Optional[List[Plan]] = None
         self.visits = 0
         self.value = 0.0              # sum of rewards, from the ROOT side's point of view
@@ -38,18 +41,21 @@ class Node:
 
 
 class MCTS:
+    """Monte Carlo Tree Search over joint plans (see the module docstring)."""
     def __init__(self, cfg: Optional[PlanConfig] = None, c: float = 0.6, prior_bias: float = 0.6,
                  rollout_depth: int = 2, widen_k: float = 2.0, widen_alpha: float = 0.5,
                  opponent_cfg: Optional[PlanConfig] = None, rng: Optional[random.Random] = None,
                  light_tree: bool = False):
+        """Configure exploration, rollouts, widening and the plan configs of both sides."""
         self.cfg = cfg or PlanConfig()
         # the modelled opponent may strike whenever adjacent (real bots do, see exposure())
         # light_tree: fewer plan variants below the root (faster, but a weaker opponent model)
-        light = dict(alt_groups=2, split_groups=1) if light_tree else {}
         self.opp_cfg = opponent_cfg or PlanConfig(splits=self.cfg.splits, gamble="always",
-                                                  max_plans=min(self.cfg.max_plans, 10 if light_tree else 12),
-                                                  **light)
-        self.inner_cfg = PlanConfig(**{**self.cfg.__dict__, **light}) if light_tree else self.cfg
+                                                  max_plans=min(self.cfg.max_plans, 10 if light_tree else 12))
+        self.inner_cfg = self.cfg
+        if light_tree:
+            self.opp_cfg = replace(self.opp_cfg, alt_groups=2, split_groups=1)
+            self.inner_cfg = replace(self.cfg, alt_groups=2, split_groups=1)
         self.c = c
         self.prior_bias = prior_bias
         self.rollout_depth = rollout_depth
@@ -61,6 +67,7 @@ class MCTS:
 
     # ------------------------------------------------------------------ helpers
     def _plans(self, state: State, side: int, root_side: int, behind: bool) -> List[Plan]:
+        """Plans for `side` at a tree node (opponent: gambles allowed), priors normalized to [0, 1]."""
         cfg = self.inner_cfg if side == root_side else self.opp_cfg
         plans = generate_plans(state, side, cfg, behind=behind if side == root_side else False)
         if plans:
@@ -70,8 +77,9 @@ class MCTS:
         return plans
 
     def _select(self, node: Node, root_side: int) -> Node:
+        """UCT + progressive bias. Only called on a node that has children."""
         log_n = math.log(node.visits + 1)
-        best, best_score = None, -1e9
+        best, best_score = node.children[0], -1e9
         for ch in node.children:
             if ch.visits == 0:
                 return ch
@@ -85,11 +93,13 @@ class MCTS:
         return best
 
     def _widen_limit(self, visits: int) -> int:
+        """Progressive widening: how many children a node with `visits` visits may have."""
         return max(1, int(self.widen_k * (visits + 1) ** self.widen_alpha))
 
     # ------------------------------------------------------------------ search
     def search(self, state: State, side: int, time_limit: float, remaining_plies: float,
-               behind: bool = False, root_plans: Optional[List[Plan]] = None) -> Plan:
+               behind: bool = False, root_plans: Optional[List[Plan]] = None) -> Optional[Plan]:
+        """Run iterations until the deadline and return the most visited root plan."""
         start = time.perf_counter()
         deadline = start + time_limit
         root = Node(None, None, None)
@@ -103,14 +113,18 @@ class MCTS:
         rng = self.rng
         # every root plan gets expanded (root is fully widened: progressive widening below it)
         root_limit = len(root.untried)
+        first = root.untried[0]
         while time.perf_counter() < deadline:
             self._iterate(root, state, side, remaining_plies, behind, rng, root_limit)
             self.iterations += 1
+        if not root.children:                  # budget gone before the first iteration finished
+            return first
         best = max(root.children, key=lambda ch: (ch.visits, ch.value / max(ch.visits, 1)))
         return best.plan
 
     def _iterate(self, root: Node, state: State, root_side: int, remaining: float, behind: bool,
                  rng, root_limit: int):
+        """One iteration: select / expand by replaying plans with fresh dice, roll out, evaluate, back up."""
         node = root
         to_move = root_side
         depth = 0
@@ -132,10 +146,13 @@ class MCTS:
             if not node.children:
                 break
             child = self._select(node, root_side)
-            ok, _ = check_moves(state.rows, state.cols, state.groups[to_move], child.plan.moves)
+            plan = child.plan
+            if plan is None:                   # only the root has no plan
+                break
+            ok, _ = check_moves(state.rows, state.cols, state.groups[to_move], plan.moves)
             if not ok:
                 break
-            state = state.apply(to_move, child.plan.moves, rng)
+            state = state.apply(to_move, plan.moves, rng)
             node = child
             to_move = other(to_move)
             depth += 1
@@ -160,6 +177,6 @@ class MCTS:
         if not self.root:
             return []
         rows = [(ch.visits, ch.value / max(ch.visits, 1), ch.plan.tag, ch.plan.moves)
-                for ch in self.root.children]
+                for ch in self.root.children if ch.plan is not None]
         rows.sort(key=lambda r: -r[0])
         return rows

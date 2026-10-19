@@ -29,6 +29,8 @@ PROTECTED = ("base", "flee", "regroup", "regroup+go", "hunt")
 
 @dataclass
 class PlanConfig:
+    """Every tunable of the plan generator (the bot's variants are just different PlanConfigs)."""
+
     splits: bool = True            # allow detachments (False = "deathball" variant)
     max_detachments: int = 3       # per group and per turn
     split_groups: int = 2          # how many of our biggest groups may split in one plan
@@ -36,6 +38,8 @@ class PlanConfig:
     safety_margin: int = 1         # extra moves of distance required from 1.5x-bigger enemies
     reserve_ratio: float = 1.0     # main body must stay >= ratio * nearby enemy groups
     reserve_radius: int = 6        # "nearby" for the reserve rule (3 lost close-start maps)
+    split_enemy_dist: int = 0      # no split while an enemy group >= half our size is this close (0 = off)
+    prize_lock: bool = False       # no split while a house needs our concentrated army (big < h <= total)
     gamble: str = "adaptive"       # "never" | "adaptive" (only when behind) | "always"
     max_plans: int = 18
     danger_weight: float = 3.0     # steps of detour accepted to avoid one expected creature loss / size
@@ -45,6 +49,8 @@ class PlanConfig:
 
 @dataclass
 class Goal:
+    """One candidate objective for one group: a target cell, a kind and an estimated value."""
+
     kind: str          # "house" | "kill" | "merge" | "flee" | "gamble" | "approach"
     target: Pos
     value: float
@@ -53,6 +59,8 @@ class Goal:
 
 @dataclass
 class Plan:
+    """A joint plan = one full turn (moves of all our groups), with its prior score and a tag."""
+
     moves: Tuple[Move, ...]
     prior: float
     tag: str
@@ -62,6 +70,7 @@ class Plan:
 # ---------------------------------------------------------------------------- helpers
 
 def _step_dir(a: int, b: int) -> int:
+    """-1, 0 or +1: the direction of one king step from coordinate a towards b."""
     return (b > a) - (b < a)
 
 
@@ -76,7 +85,7 @@ def straight_path(src: Pos, dst: Pos) -> List[Pos]:
     return path
 
 
-def enemy_attack_loss(state: State, side: int, cell: Pos, count: int,
+def enemy_attack_loss(cell: Pos, count: int,
                       enemies: Dict[Pos, int]) -> float:
     """Expected creatures we lose if we stand on `cell` with `count` and the best adjacent enemy
     group attacks us next turn (server rules: any attack is at least a random battle)."""
@@ -86,8 +95,7 @@ def enemy_attack_loss(state: State, side: int, cell: Pos, count: int,
             p = win_probability(e, count, False)
             if p > 0.45 or e >= count:          # rational enemies only take good odds
                 loss = p * count
-                if loss > worst:
-                    worst = loss
+                worst = max(worst, loss)
     return worst
 
 
@@ -167,9 +175,9 @@ def safe_step(state: State, side: int, src: Pos, count: int, goal: Pos, forbidde
         elif loss_cache is not None:
             danger = loss_cache.get((n, arrive))
             if danger is None:
-                danger = loss_cache[(n, arrive)] = enemy_attack_loss(state, side, n, arrive, enemies)
+                danger = loss_cache[(n, arrive)] = enemy_attack_loss(n, arrive, enemies)
         else:
-            danger = enemy_attack_loss(state, side, n, arrive, enemies)
+            danger = enemy_attack_loss(n, arrive, enemies)
         dist = cheb(n, goal)
         key = (dist + bonus + danger_weight * danger / max(arrive, 1),
                abs(n[0] - goal[0]) + abs(n[1] - goal[1]))
@@ -179,6 +187,7 @@ def safe_step(state: State, side: int, src: Pos, count: int, goal: Pos, forbidde
 
 
 def border_distance(state: State, p: Pos) -> int:
+    """Number of cells between p and the nearest edge of the board (0 = on the edge)."""
     return min(p[0], p[1], state.cols - 1 - p[0], state.rows - 1 - p[1])
 
 
@@ -205,7 +214,7 @@ def flee_cell(state: State, pos: Pos, count: int, threats: List[Pos], friends: D
 
 # ---------------------------------------------------------------------------- goals
 
-def candidate_goals(state: State, side: int, pos: Pos, count: int, friends: Dict[Pos, int],
+def candidate_goals(state: State, pos: Pos, count: int, friends: Dict[Pos, int],
                     enemies: Dict[Pos, int], cfg: PlanConfig, behind: bool,
                     claimed: Optional[Set[Pos]] = None, committed: Optional[Pos] = None) -> List[Goal]:
     """Ranked goals for one group (best first). `committed` = the goal this group had last turn."""
@@ -249,19 +258,18 @@ def candidate_goals(state: State, side: int, pos: Pos, count: int, friends: Dict
         d = cheb(pos, fpos)
         urgency = 1.5 if threat_cells else (0.6 if not goals else 0.25)
         goals.append(Goal("merge", fpos, urgency * fcnt * GAMMA ** d * 0.5))
-    if behind or cfg.gamble == "always":
-        if cfg.gamble != "never":
-            for ep, e in enemies.items():
-                if cheb(pos, ep) == 1 and count < 1.5 * e:
-                    p = win_probability(count, e, False)
-                    # striking first at >= 30% can beat waiting to be struck: let the search judge
-                    if p >= 0.3:
-                        goals.append(Goal("gamble", ep, max(0.05, p * e - (1 - p) * count)))
-            for hp, h in state.humans.items():
-                if cheb(pos, hp) == 1 and count < h:
-                    p = win_probability(count, h, True)
-                    if p >= 0.3:
-                        goals.append(Goal("gamble", hp, p * p * (count + h) - count))
+    if (behind or cfg.gamble == "always") and cfg.gamble != "never":
+        for ep, e in enemies.items():
+            if cheb(pos, ep) == 1 and count < 1.5 * e:
+                p = win_probability(count, e, False)
+                # striking first at >= 30% can beat waiting to be struck: let the search judge
+                if p >= 0.3:
+                    goals.append(Goal("gamble", ep, max(0.05, p * e - (1 - p) * count)))
+        for hp, h in state.humans.items():
+            if cheb(pos, hp) == 1 and count < h:
+                p = win_probability(count, h, True)
+                if p >= 0.3:
+                    goals.append(Goal("gamble", hp, p * p * (count + h) - count))
     if not goals or all(g.value <= 0.05 for g in goals):
         # nothing to do: walk towards the closest enemy we are not afraid of, or the centre
         target = None
@@ -287,6 +295,7 @@ class _Builder:
     """Turns a set of orders (src, count, goal) into a legal list of moves."""
 
     def __init__(self, state: State, side: int, enemies: Dict[Pos, int], cfg: PlanConfig):
+        """One builder per generate_plans call: its caches are only valid for this state."""
         self.state = state
         self.side = side
         self.enemies = enemies
@@ -322,6 +331,7 @@ class _Builder:
 
 
 def _orders_value(orders) -> float:
+    """Prior score of a plan = sum of the values of the goals its orders pursue."""
     return sum(g.value for _, _, g in orders)
 
 
@@ -343,7 +353,7 @@ def generate_plans(state: State, side: int, cfg: Optional[PlanConfig] = None,
     goals_of: Dict[Pos, List[Goal]] = {}
     for pos, cnt in groups:
         friends = {p: c for p, c in mine.items() if p != pos}
-        goals_of[pos] = candidate_goals(state, side, pos, cnt, friends, enemies, cfg, behind,
+        goals_of[pos] = candidate_goals(state, pos, cnt, friends, enemies, cfg, behind,
                                         committed=intents.get(pos))
 
     plans: List[Plan] = []
@@ -389,7 +399,7 @@ def generate_plans(state: State, side: int, cfg: Optional[PlanConfig] = None,
     # 2. split plans
     if cfg.splits:
         for pos, cnt in groups[:cfg.split_groups]:
-            for orders, tag, bonus in _split_orders(state, side, pos, cnt, groups, goals_of, enemies, cfg, assign):
+            for orders, tag, bonus in _split_orders(state, side, pos, cnt, groups, enemies, cfg, assign):
                 add(orders, tag, bonus)
 
     # 3. regroup on the biggest group
@@ -404,7 +414,7 @@ def generate_plans(state: State, side: int, cfg: Optional[PlanConfig] = None,
     # 3b. pincer: several groups converge on a house none of them can take alone and enter it
     #     on the SAME turn (the server sums the arrivals, so the conversion is certain)
     if cfg.pincer and len(groups) > 1:
-        for orders, tag in _pincer_orders(state, side, groups, enemies):
+        for orders, tag in _pincer_orders(state, groups, enemies):
             add(orders, tag, 0.2)
 
     # 4. hunt: everybody that can kill an enemy group goes for it
@@ -443,10 +453,19 @@ def generate_plans(state: State, side: int, cfg: Optional[PlanConfig] = None,
     return keep
 
 
-def _split_orders(state, side, pos, cnt, groups, goals_of, enemies, cfg, assign):
+def _split_orders(state, side, pos, cnt, groups, enemies, cfg, assign):
     """Yield (orders, tag, bonus) for plans where the group at `pos` sends detachments."""
     if cnt < 2:
         return
+    # hybrid rules: keep the deathball when the enemy is close, or while a prize needs all of us
+    if cfg.split_enemy_dist and any(cheb(ep, pos) <= cfg.split_enemy_dist and 2 * e >= cnt
+                                    for ep, e in enemies.items()):
+        return
+    if cfg.prize_lock:
+        total = sum(c for _, c in groups)
+        biggest = groups[0][1]
+        if any(biggest < h <= total for h in state.humans.values()):
+            return
     # main body reserve: stay bigger than nearby enemy groups
     reserve = 0
     for ep, e in enemies.items():
@@ -499,7 +518,7 @@ def _split_orders(state, side, pos, cnt, groups, goals_of, enemies, cfg, assign)
         fixed_rest = None
         if rest > 0:
             friends = {p: c for p, c in state.groups[side].items() if p != pos}
-            main_goals = candidate_goals(state, side, pos, rest, friends, enemies, cfg, False, targets)
+            main_goals = candidate_goals(state, pos, rest, friends, enemies, cfg, False, targets)
             fixed_rest = main_goals[0] if main_goals else None
         # other groups: greedy assignment, avoiding the detachments' houses
         others, _ = assign(targets, {})
@@ -511,7 +530,7 @@ def _split_orders(state, side, pos, cnt, groups, goals_of, enemies, cfg, assign)
     yield from out
 
 
-def _pincer_orders(state: State, side: int, groups, enemies):
+def _pincer_orders(state: State, groups, enemies):
     """Yield (orders, tag) converging groups on the best house that only their sum can convert."""
     biggest = groups[0][1]
     total = sum(c for _, c in groups)
@@ -561,9 +580,11 @@ def fallback_plan(state: State, side: int) -> Plan:
         blocked = (e and cnt < 1.5 * e) or (h and cnt < h)
         if mine.get(n, 0) + cnt > MAX_CELL:
             blocked = True
-        key = (blocked, enemy_attack_loss(state, side, n, cnt, enemies), n)
+        key = (blocked, enemy_attack_loss(n, cnt, enemies), n)
         if best_key is None or key < best_key:
             best, best_key = n, key
+    if best is None:                       # only possible on a 1x1 board (no neighbour at all)
+        raise ValueError("no cell to move to")
     return Plan(((pos[0], pos[1], cnt, best[0], best[1]),), 0.0, "fallback")
 
 

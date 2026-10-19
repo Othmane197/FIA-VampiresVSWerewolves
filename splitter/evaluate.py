@@ -16,7 +16,7 @@ Heuristic evaluation of a position for the Splitter, as a win probability in [0,
    bonus (the dominant side can hunt the other down without dice).
 """
 import math
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from .rules import Pos, cheb, win_probability
 from .state import State
@@ -35,7 +35,7 @@ def resolve_immediate(state: State, to_move: int) -> Tuple[Dict[Pos, int], Dict[
             if cheb(pos, vp) == 1 and cnt >= 1.5 * v and v > best_gain:
                 best, best_gain, kind = vp, v, "kill"
         for hp, h in humans.items():
-            if cheb(pos, hp) == 1 and cnt >= h and h > best_gain:
+            if cheb(pos, hp) == 1 and cnt >= h > best_gain:
                 best, best_gain, kind = hp, h, "house"
         if best is None:
             continue
@@ -143,13 +143,12 @@ def exposure(groups: Dict[Pos, int], enemies: Dict[Pos, int], enemy_moves_next: 
                     risk = 0.25 * cnt if sure else 0.0
             else:                          # d == 2: they can only come adjacent (or we can)
                 risk = (0.12 if enemy_moves_next else 0.05) * cnt if sure else 0.0
-            if risk > worst:
-                worst = risk
+            worst = max(worst, risk)
         lost += worst
     return lost
 
 
-def evaluate(state: State, side: int, to_move: int, remaining_plies: float = None) -> float:
+def evaluate(state: State, side: int, to_move: int, remaining_plies: Optional[float] = None) -> float:
     """P(side wins) estimate in [0, 1]."""
     ours_now = state.groups[side]
     theirs_now = state.groups[1 - side]

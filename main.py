@@ -1,10 +1,13 @@
 import sys
 import time
-from network import NetworkClient
-from game_state import GameState
+
 from ai_agent import AIAgent
+from game_state import GameState
+from network import NetworkClient
+
 
 def parse_args():
+    """Read --name / --delay and the server ip + port (the last two arguments, as the caller adds them)."""
     host = "127.0.0.1"
     port = 5555
     name = "CentraleBot"
@@ -44,6 +47,7 @@ def fallback_moves(state: GameState):
 
 
 def main():
+    """Protocol loop: NME, then SET/HUM/HME/MAP to build the state, then answer every UPD with a MOV."""
     host, port, name, delay = parse_args()
     print(f"=== Starting Vampires VS Werewolves AI Bot: {name} (Delay: {delay}s) ===")
     print(f"Connecting to {host}:{port} ...")

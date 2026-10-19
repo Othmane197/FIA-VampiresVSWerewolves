@@ -1,0 +1,25 @@
+# Linting configuration (read by the Ruff VS Code extension and `ruff check`).
+#
+# target-version = py38: the starter kit promises Python 3.8+ and we do not know which Python the
+# CTI tournament machines run. Ruff therefore must NOT ask for `dict[...]` / `X | None` syntax
+# (Python 3.9 / 3.10 only): that "modernisation" could crash the bot on tournament day.
+[tool.ruff]
+target-version = "py38"
+line-length = 120
+extend-exclude = ["arena/vendor", "arena/snapshots", "arena/results"]
+
+[tool.ruff.lint]
+ignore = [
+    "C408",    # dict()/tuple() calls: a style preference, not a bug
+    "FA100",   # `from __future__ import annotations` suggestions: style only (typing.* works on 3.8+)
+    "E402",    # scripts insert the repo root into sys.path before importing project modules
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Deliberate catch-all handlers: a crash on tournament day drops the connection, which the server
+# counts as cheating (game lost). These files must keep playing whatever goes wrong.
+"main.py" = ["BLE001"]
+"ai_agent.py" = ["BLE001"]
+"splitter/agent.py" = ["BLE001"]
+"arena/referee.py" = ["BLE001"]
+"tools/*.py" = ["BLE001"]
