@@ -443,7 +443,7 @@ def generate_plans(state: State, side: int, cfg: Optional[PlanConfig] = None,
 
     # 5b. pre-emptive plans from the opponent model's predicted targets (chapter 11)
     if predictions is not None and cfg.preempt:
-        for orders, tag, bonus in _preempt_orders(state, side, groups, enemies, goals_of, predictions,
+        for orders, tag, bonus in _preempt_orders(state, side, enemies, predictions,
                                                   cfg, assign):
             add(orders, tag, bonus)
 
@@ -544,7 +544,7 @@ def _split_orders(state, side, pos, cnt, groups, enemies, cfg, assign):
     yield from out
 
 
-def _preempt_orders(state, side, groups, enemies, goals_of, predictions, cfg, assign):
+def _preempt_orders(state, side, enemies, predictions, cfg, assign):
     """
     Pre-emptive plans from the opponent model's predicted targets (opponent_model.GoalRecognizer):
       deny    reach the house an enemy group is heading for before it does;

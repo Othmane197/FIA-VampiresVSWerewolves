@@ -19,6 +19,7 @@ OUT = os.path.join(ROOT, "docs", "strategy", "09_function_index.md")
 SECTIONS = [
     ("Tournament entry point", ["main.py", "ai_agent.py", "network.py", "game_state.py"]),
     ("Splitter: exact rules and state", ["splitter/rules.py", "splitter/state.py"]),
+    ("Splitter: opponent model (HMMs)", ["splitter/observe.py", "splitter/opponent_model.py"]),
     ("Splitter: plan generator", ["splitter/planner.py"]),
     ("Splitter: evaluation", ["splitter/evaluate.py"]),
     ("Splitter: search", ["splitter/mcts.py"]),
@@ -26,9 +27,10 @@ SECTIONS = [
     ("Arena (benchmarking)", ["arena/maps.py", "arena/opponents.py", "arena/referee.py", "arena/run.py",
                               "arena/replay.py", "arena/snapshot.py", "arena/fetch_opponents.py"]),
     ("Tools", ["tools/fake_server.py", "tools/probe_server.py", "tools/play_bot.py",
-               "tools/gen_function_index.py"]),
+               "tools/gen_function_index.py", "tools/opponent_report.py",
+               "tools/train_opponent_model.py"]),
     ("Tests", ["tests/test_rules.py", "tests/test_planner.py", "tests/test_agent.py",
-               "tests/test_protocol.py"]),
+               "tests/test_protocol.py", "tests/test_opponent_model.py"]),
 ]
 
 
@@ -113,8 +115,63 @@ def check_chapter_links() -> list:
     return problems
 
 
+def _definition_lines(src_lines, tree, name: str) -> list:
+    """Candidate definition lines of `name` ('Class.method', a function, class, constant or field)."""
+    if "." in name:
+        cls, meth = name.split(".", 1)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef) and node.name == cls:
+                for sub in node.body:
+                    if isinstance(sub, (ast.FunctionDef, ast.AsyncFunctionDef)) and sub.name == meth:
+                        return [sub.lineno]
+                    if isinstance(sub, ast.AnnAssign) and getattr(sub.target, "id", None) == meth:
+                        return [sub.lineno]
+        name = meth
+    pat = re.compile(rf"\s*(?:def|class)\s+{re.escape(name)}\b|\s*{re.escape(name)}\s*[:=]")
+    return [i + 1 for i, s in enumerate(src_lines) if pat.match(s)]
+
+
+def fix_chapter_links() -> int:
+    """Move every chapter line link to the current definition line of the function it names."""
+    folder = os.path.dirname(OUT)
+    fixed = 0
+    for md in sorted(os.listdir(folder)):
+        if not md.endswith(".md") or md == os.path.basename(OUT):
+            continue
+        path_md = os.path.join(folder, md)
+        with open(path_md, encoding="utf-8") as f:
+            text = f.read()
+
+        def repl(m):
+            nonlocal fixed
+            name, rel, line = m.group(1), m.group(2), int(m.group(3))
+            path = os.path.join(ROOT, rel)
+            if not os.path.exists(path):
+                return m.group(0)
+            with open(path, encoding="utf-8") as f:
+                src = f.read()
+            lines = src.splitlines()
+            ident = name.split(".")[-1]
+            if 0 < line <= len(lines) and re.search(rf"\b{re.escape(ident)}\b", lines[line - 1]):
+                return m.group(0)
+            cands = _definition_lines(lines, ast.parse(src), name)
+            if not cands:
+                return m.group(0)
+            best = min(cands, key=lambda c: abs(c - line))
+            fixed += 1
+            return m.group(0).replace(f"#L{line})", f"#L{best})")
+
+        new = LINK.sub(repl, text)
+        if new != text:
+            with open(path_md, "w", encoding="utf-8") as f:
+                f.write(new)
+    return fixed
+
+
 def main():
     """Write the index, or with --check fail if it (or a chapter's line link) is out of date."""
+    if "--fix" in sys.argv:
+        print(f"fixed {fix_chapter_links()} chapter line links")
     text = render()
     if "--check" in sys.argv:
         old = ""

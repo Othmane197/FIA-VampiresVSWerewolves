@@ -20,6 +20,8 @@ in VS Code, Ctrl+click opens the file at that line.
 | 08 | [Results and iteration history](08_results_and_iterations.md) | Benchmark numbers, the no-split ablation, each improvement and the lost game that motivated it, rejected ideas, next steps |
 | 09 | [Function index](09_function_index.md) | Generated table of every class and function, with line links |
 | 10 | [Parameters](10_parameters.md) | Every tunable, its current value, and the evidence behind it |
+| 11 | [Opponent modelling (HMMs)](11_opponent_modeling.md) | Move reconstruction, style HMM (Baum-Welch), goal recognition, policy HMM, how predictions feed the search, the measured verdict, and the search bug found along the way |
+| 12 | [Improvement campaign](12_experiments.md) | Screening, anti-overfitting validation on hold-out opponents and maps, replication on fresh dice; what reliably beat the baseline and what did not |
 
 The raw evidence for chapter 02 is [../SERVER_FINDINGS.md](../SERVER_FINDINGS.md).
 
@@ -28,7 +30,7 @@ The raw evidence for chapter 02 is [../SERVER_FINDINGS.md](../SERVER_FINDINGS.md
 The documentation is updated in the **same change** as the code:
 
 1. **Regenerate the function index.** Run `python tools/gen_function_index.py`. Use `--check` to verify it is up to date.
-2. **Fix line links in chapters 01–08 and 10** for every function whose line moved. The index from step 1 lists the new lines.
+2. **Fix line links in the chapters** for every function whose line moved: `python tools/gen_function_index.py --fix` moves each link to its function's current definition line (review the diff).
 3. **Update the chapter that explains the changed behaviour.** If a parameter changed, update [10_parameters.md](10_parameters.md).
 4. **New benchmark results go in [08](08_results_and_iterations.md),** with the command used.
 5. **Add a line to the change log below.**
@@ -37,4 +39,5 @@ The documentation is updated in the **same change** as the code:
 
 | Date | Change | Chapters updated |
 |---|---|---|
+| 2026-10-20 | v6: open-loop expansion fix (+2.2 pts, default). Opponent model (`splitter/observe.py`, `splitter/opponent_model.py`, `tools/opponent_report.py`, `tools/train_opponent_model.py`) and the pre-emptive, adaptive, pre-game and map-aware switches: all measured, off by default. Arena: multi-bot shared pool, paired comparison, `--panel fast`, hold-out maps, `--save-all-logs`. 34 tests. | 03, 04, 05, 06, 07, 08, 10, 11 (new), 12 (new) |
 | 2026-10-19 | Documentation created for Splitter v5: contest-aware race, reserve radius 6, planner caches. Lint and type fixes: Ruff 0, Pylance 0 errors in our code. `MCTS.search` returns the best prior plan if no iteration finished in time. | all |

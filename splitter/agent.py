@@ -79,8 +79,9 @@ class SplitterAgent:
         self.map_checked = False
         if getattr(self, "base_cfg", None) is not None:
             self.cfg.splits = self.base_cfg.splits
-        if getattr(self, "opp_model", None) is not None:
-            self.opp_model.reset()
+        model = getattr(self, "opp_model", None)
+        if model is not None:
+            model.reset()
 
     # ------------------------------------------------------------------ interfaces
     def compute_moves(self, game_state) -> List[Move]:
@@ -238,6 +239,8 @@ class SplitterAgent:
         cfg, base = self.cfg, self.base_cfg
         cfg.reserve_radius, cfg.safety_margin, cfg.hunt_bonus = (base.reserve_radius, base.safety_margin,
                                                                  base.hunt_bonus)
+        if self.opp_model is None:
+            return
         t = self.opp_model.tendencies(state)
         if t["turns"] < 8:
             return

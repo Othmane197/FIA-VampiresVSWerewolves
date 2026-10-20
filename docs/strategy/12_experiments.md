@@ -72,11 +72,26 @@ effect on unseen opponents and maps**, so it was rejected.
 | Test | Result |
 |---|---|
 | Head-to-head vs the baseline itself (22 maps, 176 games, seed 5000) | 47.4% ± 3.8: neutral. Expected: against our own bot there is no risk style to exploit (the tuning runs vs `Snap:v5fix` were also neutral, +3.6 / +0.9) |
-| Paired, all 10 non-self opponents, 22 maps (seed 7000) | see 12.4 |
+| Paired, all 10 non-self opponents, 22 maps (seed 7000, 440 games) | **+1.8 ± 1.7** (RaceMCTS +11.4, aggressive proxy +8.0, Grabber −5.7, Greedy −3.4) |
+| **Pre-registered confirmatory test:** strong opponents only (RaceMCTS, Expecti, both proxies), 22 maps, seed 9000, 352 games. Hypothesis fixed *before* the run: "gains against strong opponents" | **−3.4 ± 2.5** (RaceMCTS −8.0, aggressive proxy −9.1): **hypothesis rejected** |
 
-## 12.3 Why the opponent model helps once it stops steering the search
+## 12.3 Verdict
 
-- **Stage A shows the gain is the *risk model*.**
+| Change | Tuning set | Unseen data (pooled) | Decision |
+|---|---|---|---|
+| **Open-loop expansion fix** (chapter 11.7) | — | **+2.2 pts** over v5 on 504 paired games; **61.6%** head-to-head vs v5; clear mechanism (4.1% of turns were lost) | **adopted (default)** |
+| Opponent model without search steering | +7.4, +10.4 | about **+0.6 ± 1.1**: B +1.8 ± 2.0, C +1.8 ± 1.7, confirmatory −3.4 ± 2.5 | off (opt-in) |
+| Kiting + rollout depth 0 | +11.3 | −0.6 ± 2.0 | rejected |
+| Every other parameter change | within ±3 | — | defaults kept |
+
+**Lesson for the report.** Picking the best of 14 candidates on one set of games always produces
+an impressive number (+7 to +11 here). Only validation on unseen opponents and maps, followed by
+replication on fresh dice, separates a real improvement from luck. The two candidates that looked
+best both failed it. The only change that survived is the one with a clear mechanism behind it.
+
+## 12.4 Why the opponent model looked like it helped (hypothesis, not confirmed)
+
+- **On the tuning set, Stage A attributed the gain to the *risk model*.**
   - adaptive settings alone: +0.3;
   - plus opponent strikes in rollouts (I2) and the opponent-specific strike threshold in the evaluation (I3): +7 to +10.
 - **The static bot is over-cautious against some opponents.** Since v3 it assumed *every* opponent strikes first at ≥ 30% odds (the lesson from RaceMCTS). Against opponents that only take good odds (Apex, Grabber, deathball styles), it stayed out of contact and passed up conversions near enemy groups.
@@ -85,3 +100,4 @@ effect on unseen opponents and maps**, so it was rejected.
   - non-gamblers: threats are counted only at ≥ 50% odds;
   - gamblers: rollouts include their strikes.
 - **Steering which replies are searched (I1) is what hurt,** because it under-explored the strong opponents' dangerous replies. It stays off.
+- **On fresh dice the risk-model gain did not replicate.** The mechanism is plausible, but on our panel the effect is too small to measure. It remains an opt-in switch for opponents unlike our teammates' bots.

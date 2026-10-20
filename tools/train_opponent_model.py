@@ -78,7 +78,7 @@ def policy_score(games, names, stay, eps, every=2):
                 continue
             goals = GoalRecognizer()
             pol = PolicyHMM(goals, stay=stay, eps=eps)
-            for i, (obs, ph, mid, after, rflows, steps) in enumerate(turns):
+            for i, (_obs, _ph, mid, after, rflows, steps) in enumerate(turns):
                 dists = pol.expert_dists(mid, s)
                 if i % every == 0:
                     mix = pol.mixture(dists)

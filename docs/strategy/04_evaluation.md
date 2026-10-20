@@ -1,6 +1,6 @@
 # 04 · Evaluation: [splitter/evaluate.py](../../splitter/evaluate.py)
 
-[`evaluate(state, side, to_move, remaining_plies)`](../../splitter/evaluate.py#L151) returns an
+[`evaluate(state, side, to_move, remaining_plies)`](../../splitter/evaluate.py#L152) returns an
 estimate of **P(side wins)** in [0, 1]. MCTS uses it at the end of every rollout (chapter 05). The
 agent also uses it at the root, to decide whether we are behind and gambles become allowed
 (chapter 06).
@@ -58,7 +58,7 @@ our groups we keep the worst threat:
 
 This is what punishes splits that are too thin, and stepping next to an equal enemy group.
 
-## 4.4 From margin to probability: inside [`evaluate`](../../splitter/evaluate.py#L151)
+## 4.4 From margin to probability: inside [`evaluate`](../../splitter/evaluate.py#L152)
 
 ```
 a, b  = projected totals (us, them) minus exposure, floored at 0.1
@@ -75,6 +75,15 @@ uncertain. This fixed a lost game where we gave up a safe late lead by stepping 
 
 ## 4.5 Helper
 
-[`material_balance`](../../splitter/evaluate.py#L199): (our total − theirs) / everything. The agent
+[`material_balance`](../../splitter/evaluate.py#L205): (our total − theirs) / everything. The agent
 uses it to switch on gambles in the last 20 plies when behind
-([`SplitterAgent._choose`](../../splitter/agent.py#L132)).
+([`SplitterAgent._choose`](../../splitter/agent.py#L169)).
+
+## 4.6 Opponent-specific risk and endgame switches
+
+- **`evaluate(..., strike_p=...)`** passes the threshold to [`exposure`](../../splitter/evaluate.py#L123): the lowest odds at which the enemy is assumed to strike an adjacent group of ours.
+  - Default 0.3 (the v3 lesson).
+  - With the opponent model on, MCTS sets it to **0.5** once the style HMM has seen this opponent never take long-shot attacks.
+  - This, together with opponent strikes in rollouts, is where the model's measured gain comes from (chapter 12).
+- **`evaluate(..., kite=True)`** makes the sigmoid maximally steep once no humans are left, so a lead counts as decided and the search keeps its distance.
+  - +5.1 on the tuning set, −0.6 on the hold-out set: rejected (chapter 12).

@@ -62,7 +62,7 @@ class TestObservation(unittest.TestCase):
         t.note_our_move(s0, V, our)
         s1 = s0.apply(V, our, mode="mean").apply(W, [(8, 8, 6, 7, 7)], mode="mean")
         obs = t.observe(s1)
-        self.assertIsNotNone(obs)
+        assert obs is not None
         self.assertEqual(sorted(obs.flows), [((8, 8), (7, 7), 6)])
 
 
@@ -102,7 +102,8 @@ class TestHMM(unittest.TestCase):
         hmm = StyleHMM(p)
         for _ in range(12):
             hmm.update((1, 0, 1, 1), 0)          # splits and converts every turn
-        self.assertEqual(max(hmm.mode_probs(), key=hmm.mode_probs().get), "SPLITFARM")
+        probs = hmm.mode_probs()
+        self.assertEqual(max(probs, key=lambda m: probs[m]), "SPLITFARM")
 
     def test_goal_recognition_straight_walk(self):
         g = GoalRecognizer()

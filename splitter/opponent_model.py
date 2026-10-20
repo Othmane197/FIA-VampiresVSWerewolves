@@ -311,6 +311,8 @@ class GoalRecognizer:
         if kind == "F":                       # fleeing = getting far from our groups
             them = state.groups[1 - mover]
             return -min((cheb(cell, u) for u in them), default=0)
+        if tp is None:
+            return 0.0
         # king-move distance, ties broken towards the straight line (Manhattan): with Chebyshev
         # alone, the diagonal and straight steps towards a target would be equally likely
         return cheb(cell, tp) + 0.2 * (abs(cell[0] - tp[0]) + abs(cell[1] - tp[1]))
@@ -342,7 +344,8 @@ class GoalRecognizer:
                 pool = state.groups[1 - mover] if kind == "U" else state.groups[mover]
                 if not pool:
                     continue
-                tp = min(pool, key=lambda c: cheb(c, tp))
+                old_tp: Pos = tp
+                tp = min(pool, key=lambda c: cheb(c, old_tp))
             key = (kind, tp)
             out[key] = out.get(key, 0.0) + p
         return out

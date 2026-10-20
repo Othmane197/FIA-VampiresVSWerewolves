@@ -7,7 +7,7 @@ Every tunable, its current value, where it lives, and what the evidence says. Ch
 Δ values marked **(A)** come from the screening in chapter 12 (paired, tuning set, 0.1 s): only
 large or replicated differences mean anything there.
 
-## 10.1 Plan generator: [`PlanConfig`](../../splitter/planner.py#L31)
+## 10.1 Plan generator: [`PlanConfig`](../../splitter/planner.py#L32)
 
 | Parameter | Value | Meaning | Evidence |
 |---|---|---|---|
@@ -61,7 +61,7 @@ large or replicated differences mean anything there.
 | `opp_priors` | True (only used if the model is on) | I1: the model steers the opponent replies (trust-gated) | Hurts vs strong bots: use `opp_priors=0` |
 | `opp_eval` | True (only used if the model is on) | I2 + I3: opponent strikes in rollouts, opponent-specific strike threshold | **This is where the model's gain comes from** (chapter 12) |
 
-## 10.4 Agent: [`SplitterAgent`](../../splitter/agent.py#L33)
+## 10.4 Agent: [`SplitterAgent`](../../splitter/agent.py#L35)
 
 | Parameter | Value | Meaning |
 |---|---|---|
@@ -70,7 +70,7 @@ large or replicated differences mean anything there.
 | `max_ply` | 200 | The server's `MaxPlays` (plies in total) |
 | `game_seconds` | 300 | The server's `MaxGameDuration`, used to estimate the plies left (None in the arena) |
 | behind threshold | `evaluate` < 0.35, or the last 20 plies with less material | Enables gambles when `gamble="adaptive"` |
-| `opponent_model` | FINAL_OM | HMM opponent model (chapter 11) |
+| `opponent_model` | False | HMM opponent model (chapter 11): accurate predictions, no replicated win-rate gain (chapter 12) |
 | `adapt` | True | I5: risk settings follow the opponent's measured style (with the model) |
 | `map_aware` | False | Deathball on maps dominated by one prize: −3.9 pts, rejected |
 | `first_move_time` | 0 | Longer first move (arena test of `--pregame`): −4.7, rejected |
