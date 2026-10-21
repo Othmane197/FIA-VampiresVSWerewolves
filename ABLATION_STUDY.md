@@ -1,5 +1,5 @@
 # Étude d'Ablation & Évolution Algorithmique d'Apex (v1 $\rightarrow$ v2)
-**Projet** : Vampires VS Werewolves (FIA – CentraleSupélec / Centrale Casablanca)  
+**Projet** : Vampires VS Werewolves (FIA – CentraleSupélec)  
 **Auteur** : Équipe Apex (Othmane MAAMAR)  
 **Type d'évaluation** : Étude d'Ablation Combinatoire & Tournoi Interne Round-Robin
 

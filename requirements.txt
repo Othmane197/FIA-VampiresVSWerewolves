@@ -1,4 +1,4 @@
-# Vampires VS Werewolves (FIA - CentraleSupélec / Centrale Casablanca)
+# Vampires VS Werewolves (FIA - CentraleSupélec)
 # This project uses ONLY the Python Standard Library (Python 3.8+).
 # No external pip dependencies are required.
 #

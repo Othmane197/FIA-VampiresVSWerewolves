@@ -1,5 +1,5 @@
 # Guide Technique : Algorithme Minimax Alpha-Bêta (Apex)
-**Projet** : Vampires VS Werewolves (FIA – CentraleSupélec / Centrale Casablanca)  
+**Projet** : Vampires VS Werewolves (FIA – CentraleSupélec)  
 **Profil cible** : Ingénieur Généraliste (Notions d'algorithmique, d'arbres et de probabilités)
 
 ---

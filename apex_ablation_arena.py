@@ -1,6 +1,6 @@
 """
 Apex Internal Ablation Tournament & Combinatorial Benchmark
-FIA - CentraleSupélec / Centrale Casablanca
+FIA - CentraleSupélec
 
 Permet d'évaluer scientifiquement chaque amélioration isolée et combinée :
 1. OFR (Optimal Foraging Rate) : Rendement marginal par unité de temps

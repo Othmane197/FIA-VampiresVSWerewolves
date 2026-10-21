@@ -1,5 +1,5 @@
 # 🐺 Architecture & Fonctionnement Intégral du Moteur Apex v2 (Guide Technique)
-**Projet** : Vampires VS Werewolves (FIA – CentraleSupélec / Centrale Casablanca)  
+**Projet** : Vampires VS Werewolves (FIA – CentraleSupélec)  
 **Auteur** : Équipe Apex (Othmane MAAMAR)  
 **Document de Référence** : Rapport d'architecture, modélisation mathématique et soutenance technique
 
@@ -268,4 +268,4 @@ Le dépôt fournit trois fichiers d'agents autonomes correspondant aux 3 meilleu
   ```
 
 ---
-*Document certifié conforme aux spécifications du projet FIA – CentraleSupélec / Centrale Casablanca.*
+*Document certifié conforme aux spécifications du projet FIA – CentraleSupélec.*

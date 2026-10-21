@@ -1,5 +1,5 @@
 # ⚔️ Vampires VS Werewolves — Python Client Starter Kit
-**FIA (Fondements de l'Intelligence Artificielle) — CentraleSupélec / Centrale Casablanca**
+**FIA (Fondements de l'Intelligence Artificielle) — CentraleSupélec**
 
 A clean, lightweight, and complete Python template to connect to the official game server and build your own competitive AI agent.
 
