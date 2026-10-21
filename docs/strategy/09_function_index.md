@@ -292,11 +292,12 @@ Chapters 01–08 explain *why*; this page answers *where*.
 
 | Name | Kind | Line | Purpose (first docstring line) |
 |---|---|---|---|
-| `load_map` | function | [66](../../tools/teammate_matches.py#L66) | An .xml map file (relative to the repo) or a map name of arena/maps.py. |
-| `play_game` | function | [73](../../tools/teammate_matches.py#L73) | One full game over the protocol: fake server + main.py + the teammate's bot. Returns one row. |
-| `summarize` | function | [126](../../tools/teammate_matches.py#L126) | Per-opponent table (markdown) of the finished games. |
-| `store_history` | function | [152](../../tools/teammate_matches.py#L152) | One line per opponent in arena/results/history.csv (same file as the arena and server matches). |
-| `main` | function | [171](../../tools/teammate_matches.py#L171) | Command line: play every (opponent, game), record each game at once, print the summary. |
+| `load_map` | function | [67](../../tools/teammate_matches.py#L67) | An .xml map file (relative to the repo) or a map name of arena/maps.py. |
+| `schedule` | function | [74](../../tools/teammate_matches.py#L74) | Game g (0-based): every map as Vampires (we connect first), then every map as Werewolves. |
+| `play_game` | function | [79](../../tools/teammate_matches.py#L79) | One full game over the protocol: fake server + main.py + the teammate's bot. Returns one row. |
+| `summarize` | function | [132](../../tools/teammate_matches.py#L132) | Per-opponent table (markdown) of the finished games. |
+| `store_history` | function | [158](../../tools/teammate_matches.py#L158) | One line per opponent in arena/results/history.csv (same file as the arena and server matches). |
+| `main` | function | [177](../../tools/teammate_matches.py#L177) | Command line: play every (opponent, game), record each game at once, print the summary. |
 
 ### [tools/server_match.py](../../tools/server_match.py)
 
@@ -441,5 +442,6 @@ Chapters 01–08 explain *why*; this page answers *where*.
 | `TestFasterBenchmarks.test_informative_slots_skip_games_nobody_disagrees_on` | method | [141](../../tests/test_arena.py#L141) |  |
 | `TestTeammateMatches` | class | [166](../../tests/test_arena.py#L166) |  |
 | `TestTeammateMatches.test_real_conditions_script_plays_and_records` | method | [167](../../tests/test_arena.py#L167) |  |
-| `TestServerMatch` | class | [183](../../tests/test_arena.py#L183) |  |
-| `TestServerMatch.test_two_programs_play_over_the_protocol` | method | [184](../../tests/test_arena.py#L184) |  |
+| `TestTeammateMatches.test_schedule_covers_every_map_and_side` | method | [182](../../tests/test_arena.py#L182) |  |
+| `TestServerMatch` | class | [189](../../tests/test_arena.py#L189) |  |
+| `TestServerMatch.test_two_programs_play_over_the_protocol` | method | [190](../../tests/test_arena.py#L190) |  |

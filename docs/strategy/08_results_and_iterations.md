@@ -77,6 +77,25 @@ are played, chapter 07.8.)
 - `main.py` (Splitter) against Apex (through `tools/play_bot.py`) on testmap.xml;
 - 200 plies, **won 18 – 14**, no cheating or timeout entries in the server trace, slowest move 1.48 s.
 
+**Real-conditions matches against the teammates** ([tools/teammate_matches.py](../../tools/teammate_matches.py),
+chapter 07.5; 2026-10-21): the flagship through `main.py`, the real protocol (2 s per move,
+200 plies, 5-minute clock), 1.5 s per move for every bot, one game at a time, no speed-ups.
+11 of 12 planned games (the run was stopped during Expecti's game 3). Full table, game by game:
+`arena/results/teammates/20261021-161347_flagship/summary.md`.
+
+| Opponent (teammate) | Games | W - D - L | Score | Avg. margin |
+|---|---|---|---|---|
+| Apex (Othmane) | 3 | 3 - 0 - 0 | 100% | +6.0 |
+| TacticalSplitter (Othmane) | 3 | 3 - 0 - 0 | 100% | +3.7 |
+| RaceMCTS (Ronita) | 3 | 2 - 0 - 1 | 67% | +4.3 |
+| Expecti (Dana) | 2 | 1 - 1 - 0 | 75% | +1.5 |
+| **All** | **11** | **9 - 1 - 1** | **86%** | **+4.1** |
+
+- **Safety:** 0 illegal or empty moves, 0 dropped connections, 0 watchdog fallbacks. Slowest move 1.50 s, except **one 9.3 s move** in Apex game 1 (won anyway). It was a normal agent answer, not a watchdog fallback, and Apex also timed out once in that game, so the whole process (watchdog included) appears to have been frozen, most likely by a stall of the machine.
+- **By side:** as Vampires (moving first) 7 wins and 1 draw in 8 games; as Werewolves 2 wins and 1 loss in 3 games (the loss: RaceMCTS on testmap).
+- **Sample size:** 11 games give about ±10% per opponent group; this is a check of real-conditions behaviour, not a precise strength estimate (chapter 14 has those).
+- An earlier run of the same day (`20261021-155722_flagship`, 79%) is superseded: its schedule tied each map to one side (fixed since).
+
 ## 8.3 Iteration history: every change came from a lost game
 
 | Version | Change | Lost game that motivated it | Measured effect |
