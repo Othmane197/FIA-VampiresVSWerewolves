@@ -73,7 +73,28 @@ def race_term(board: BoardState, species: Species) -> float:
     return total
 
 
-def evaluate(board: BoardState, species: Species, race_weight: float = DEFAULT_RACE_WEIGHT) -> float:
+def _closeness(board: BoardState, species: Species) -> float:
+    """How close `species` is to a human group it can convert: cap - (distance of the closest
+    group that has >= H creatures to a human group of size H); 0 if no such pair exists."""
+    cap = max(board.rows, board.cols)
+    best = None
+    groups = board.get_species_groups(species)
+    for hpos, h in board.get_humans():
+        d = _nearest_strong_enough(groups, hpos, h)
+        if d is not None and (best is None or d < best):
+            best = d
+    return 0.0 if best is None else float(max(0, cap - best))
+
+
+def progress_term(board: BoardState, species: Species) -> float:
+    """Our closeness minus the enemy's closeness (antisymmetric, so evaluate stays zero-sum).
+    Gives a small push toward actually walking to convertible humans (see module docstring)."""
+    enemy = Species.WEREWOLF if species == Species.VAMPIRE else Species.VAMPIRE
+    return _closeness(board, species) - _closeness(board, enemy)
+
+
+def evaluate(board: BoardState, species: Species, race_weight: float = DEFAULT_RACE_WEIGHT,
+             progress_weight: float = 0.0) -> float:
     """Score of `board` for `species` (see module docstring)."""
     enemy = Species.WEREWOLF if species == Species.VAMPIRE else Species.VAMPIRE
     ours = board.get_species_total(species)
@@ -89,4 +110,7 @@ def evaluate(board: BoardState, species: Species, race_weight: float = DEFAULT_R
     if board.turn_count >= board.max_turns:
         return WIN_SCORE if ours > theirs else (-WIN_SCORE if ours < theirs else 0.0)
 
-    return (ours - theirs) + race_weight * race_term(board, species)
+    value = (ours - theirs) + race_weight * race_term(board, species)
+    if progress_weight:
+        value += progress_weight * progress_term(board, species)
+    return value

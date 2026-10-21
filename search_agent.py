@@ -63,10 +63,12 @@ class SearchInfo:
 
 
 class _Context:
-    def __init__(self, root: Species, deadline: float, race_weight: float, max_chance_battles: int):
+    def __init__(self, root: Species, deadline: float, race_weight: float, max_chance_battles: int,
+                 progress_weight: float = 0.0):
         self.root = root
         self.deadline = deadline
         self.race_weight = race_weight
+        self.progress_weight = progress_weight
         self.max_chance_battles = max_chance_battles
         self.nodes = 0
 
@@ -85,10 +87,10 @@ def _value(board: BoardState, to_move: Species, depth: int, ctx: _Context) -> fl
     if time.perf_counter() > ctx.deadline:
         raise _Timeout()
     if depth == 0 or board.is_game_over()[0]:
-        return evaluate(board, ctx.root, ctx.race_weight)
+        return evaluate(board, ctx.root, ctx.race_weight, ctx.progress_weight)
     turns = generate_turns(board, to_move)
     if not turns:                                    # the player to move has no creatures
-        return evaluate(board, ctx.root, ctx.race_weight)
+        return evaluate(board, ctx.root, ctx.race_weight, ctx.progress_weight)
     maximizing = to_move == ctx.root
     best = -INF if maximizing else INF
     for turn in turns:
@@ -98,11 +100,11 @@ def _value(board: BoardState, to_move: Species, depth: int, ctx: _Context) -> fl
 
 
 def choose_turn(board: BoardState, species: Species, depth: int = 2, time_limit: float = 1.5,
-                race_weight: float = DEFAULT_RACE_WEIGHT, max_chance_battles: int = 2
-                ) -> Tuple[Optional[Turn], SearchInfo]:
+                race_weight: float = DEFAULT_RACE_WEIGHT, max_chance_battles: int = 2,
+                progress_weight: float = 0.0) -> Tuple[Optional[Turn], SearchInfo]:
     """Best turn for `species` on `board` and some statistics. Returns (None, info) if no creatures."""
     start = time.perf_counter()
-    ctx = _Context(species, start + time_limit, race_weight, max_chance_battles)
+    ctx = _Context(species, start + time_limit, race_weight, max_chance_battles, progress_weight)
     info = SearchInfo(depth=depth)
     turns = generate_turns(board, species)
     info.root_turns = len(turns)
@@ -129,11 +131,13 @@ class SearchAgent:
     """Same interface as the repo's AIAgent: compute_moves(GameState) -> list of moves."""
 
     def __init__(self, name: str = "ExpectiBot", depth: int = 2, time_limit: float = 1.5,
-                 race_weight: float = DEFAULT_RACE_WEIGHT, max_chance_battles: int = 2):
+                 race_weight: float = DEFAULT_RACE_WEIGHT, max_chance_battles: int = 2,
+                 progress_weight: float = 0.0):
         self.name = name
         self.depth = depth
         self.time_limit = time_limit
         self.race_weight = race_weight
+        self.progress_weight = progress_weight
         self.max_chance_battles = max_chance_battles
         self.last_info: Optional[SearchInfo] = None
         self.last_error: Optional[str] = None
@@ -143,7 +147,7 @@ class SearchAgent:
         try:
             board = board_from_state(state)
             turn, info = choose_turn(board, state.our_species, self.depth, self.time_limit,
-                                     self.race_weight, self.max_chance_battles)
+                                     self.race_weight, self.max_chance_battles, self.progress_weight)
             self.last_info = info
             return turn or []
         except Exception as e:                       # never crash the connection loop
