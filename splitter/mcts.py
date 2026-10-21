@@ -5,8 +5,8 @@ Monte Carlo Tree Search over joint plans (planner.generate_plans), for the Split
     so the opponent is modelled as a smart splitter too), then ours, ...
   * Open loop: nodes store plans, not boards. Every iteration replays the plans from the root
     with fresh dice (random battles are sampled with the server's exact rules), so chance is
-    averaged over iterations. A stored plan that became illegal in a sampled future simply
-    ends the descent there.
+    averaged over iterations. A stored plan that is illegal in the current sampled future
+    (a group died earlier in this iteration) is never applied: the descent stops there.
   * Selection: UCT + a progressive-bias term from the planner's prior score of each plan.
     Progressive widening: a node only considers its k(N) best plans, k growing with visits.
   * Leaf: a short greedy rollout (planner.quick_plan) then evaluate.evaluate (a win probability).
@@ -15,17 +15,17 @@ Monte Carlo Tree Search over joint plans (planner.generate_plans), for the Split
 import math
 import random
 import time
-from dataclasses import replace
 from typing import List, Optional
 
-from .evaluate import evaluate
+from .evaluate import DEFAULT_EVAL, EvalParams, evaluate
 from .planner import Plan, PlanConfig, generate_plans, quick_plan
-from .rules import check_moves, other, win_probability
+from .rules import check_moves, other
 from .state import State
 
 
 class Node:
     """One node of the open-loop tree: the plan that leads to it, statistics, children."""
+
     __slots__ = ("children", "mover", "parent", "plan", "prior", "untried", "value", "visits")
 
     def __init__(self, plan: Optional[Plan], mover: Optional[int], parent: Optional["Node"], prior: float = 0.0):
@@ -42,55 +42,35 @@ class Node:
 
 class MCTS:
     """Monte Carlo Tree Search over joint plans (see the module docstring)."""
+
     def __init__(self, cfg: Optional[PlanConfig] = None, c: float = 0.6, prior_bias: float = 0.6,
                  rollout_depth: int = 2, widen_k: float = 2.0, widen_alpha: float = 0.5,
                  opponent_cfg: Optional[PlanConfig] = None, rng: Optional[random.Random] = None,
-                 light_tree: bool = False, opp_model=None, opp_selection: str = "uct",
-                 opp_priors: bool = True, opp_eval: bool = True, kite: bool = False):
-        """Configure exploration, rollouts, widening and the plan configs of both sides."""
+                 ev: EvalParams = DEFAULT_EVAL):
+        """Configure exploration, rollouts, widening, the plan configs of both sides and the evaluation."""
         self.cfg = cfg or PlanConfig()
         # the modelled opponent may strike whenever adjacent (real bots do, see exposure())
-        # light_tree: fewer plan variants below the root (faster, but a weaker opponent model)
         self.opp_cfg = opponent_cfg or PlanConfig(splits=self.cfg.splits, gamble="always",
-                                                  max_plans=min(self.cfg.max_plans, 10 if light_tree else 12))
-        self.inner_cfg = self.cfg
-        if light_tree:
-            self.opp_cfg = replace(self.opp_cfg, alt_groups=2, split_groups=1)
-            self.inner_cfg = replace(self.cfg, alt_groups=2, split_groups=1)
+                                                  max_plans=min(self.cfg.max_plans, 12))
         self.c = c
         self.prior_bias = prior_bias
         self.rollout_depth = rollout_depth
         self.widen_k = widen_k
         self.widen_alpha = widen_alpha
         self.rng = rng or random.Random()
-        # opponent model (splitter/opponent_model.py): predicted replies get the priors at
-        # opponent nodes, in proportion to how well the model predicts this opponent (tau)
-        self.opp_model = opp_model
-        self.opp_selection = opp_selection          # "uct" (progressive bias) | "puct"
-        self.opp_priors = opp_priors                # I1 on/off (the model may still adapt settings)
-        self.opp_eval = opp_eval                    # I2 + I3 on/off
-        self.kite = kite                            # endgame kiting in the evaluation
-        self.tau = 0.0
-        self.strike_p = 1.1                         # opponent strikes in rollouts at P >= this
-        self.eval_strike_p = 0.3                    # lowest odds at which it strikes (evaluation)
+        self.ev = ev                                # evaluation constants (the backup is calibrated)
         self.iterations = 0
         self.root: Optional[Node] = None
 
     # ------------------------------------------------------------------ helpers
     def _plans(self, state: State, side: int, root_side: int, behind: bool) -> List[Plan]:
         """Plans for `side` at a tree node (opponent: gambles allowed), priors normalized to [0, 1]."""
-        cfg = self.inner_cfg if side == root_side else self.opp_cfg
+        cfg = self.cfg if side == root_side else self.opp_cfg
         plans = generate_plans(state, side, cfg, behind=behind if side == root_side else False)
         if plans:
             top = max(p.prior for p in plans) or 1.0
             for p in plans:
                 p.prior = max(0.0, p.prior / top) if top > 0 else 0.0
-            if side != root_side and self.opp_model is not None and self.tau > 0:
-                scores = self.opp_model.score_plans(state, side, plans)
-                best = max(scores) or 1.0
-                for p, sc in zip(plans, scores):
-                    p.prior = (1 - self.tau) * p.prior + self.tau * sc / best
-                plans.sort(key=lambda p: -p.prior)     # predicted replies are expanded first
         return plans
 
     def _select(self, node: Node, root_side: int) -> Node:
@@ -103,11 +83,6 @@ class MCTS:
             q = ch.value / ch.visits
             if ch.mover != root_side:
                 q = 1.0 - q
-                if self.opp_selection == "puct" and self.tau > 0:
-                    score = q + 2.0 * self.c * ch.prior * math.sqrt(node.visits) / (1.0 + ch.visits)
-                    if score > best_score:
-                        best, best_score = ch, score
-                    continue
             score = (q + self.c * math.sqrt(log_n / ch.visits)
                      + self.prior_bias * ch.prior / (1.0 + ch.visits))
             if score > best_score:
@@ -124,15 +99,6 @@ class MCTS:
         """Run iterations until the deadline and return the most visited root plan."""
         start = time.perf_counter()
         deadline = start + time_limit
-        if self.opp_model is not None:
-            self.tau = self.opp_model.trust if self.opp_priors else 0.0
-            pg = self.opp_model.p_gamble
-            self.strike_p = 0.3 if pg >= 0.25 else (0.5 if pg >= 0.1 else 1.1)
-            # I3: an opponent that never takes long shots is not a threat at 30-50% odds
-            known = self.opp_model.style.turns >= 8
-            self.eval_strike_p = 0.5 if known and self.opp_model.p_longshot < 0.05 else 0.3
-            if not self.opp_eval:
-                self.strike_p, self.eval_strike_p = 1.1, 0.3
         root = Node(None, None, None)
         root.untried = root_plans if root_plans is not None else self._plans(state, side, side, behind)
         self.root = root
@@ -169,7 +135,7 @@ class MCTS:
                 plan = node.untried.pop(0)
                 # open loop: this node's plans were generated in an earlier sampled future, where
                 # a group may still have been alive. An illegal plan here is skipped, not applied
-                # (applying it used to raise, losing the whole search for this turn).
+                # (applying it used to raise, losing the whole search for this turn: v6 fix).
                 if not check_moves(state.rows, state.cols, state.groups[to_move], plan.moves)[0]:
                     break
                 child = Node(plan, to_move, node, plan.prior)
@@ -196,17 +162,13 @@ class MCTS:
         for _ in range(self.rollout_depth):
             if state.is_terminal():
                 break
-            moves = None
-            if to_move != root_side and self.strike_p <= 1.0:
-                moves = _strike(state, to_move, self.strike_p)
-            if not moves:
-                moves = quick_plan(state, to_move)
+            moves = quick_plan(state, to_move)
             if not moves:
                 break
             state = state.apply(to_move, moves, rng)
             to_move = other(to_move)
             depth += 1
-        reward = evaluate(state, root_side, to_move, remaining - depth, self.eval_strike_p, self.kite)
+        reward = evaluate(state, root_side, to_move, remaining - depth, ev=self.ev)
         while node is not None:
             node.visits += 1
             node.value += reward
@@ -220,15 +182,3 @@ class MCTS:
                 for ch in self.root.children if ch.plan is not None]
         rows.sort(key=lambda r: -r[0])
         return rows
-
-
-def _strike(state: State, side: int, min_p: float):
-    """A gambling opponent's rollout move: strike the best adjacent target it beats at >= min_p."""
-    best = None
-    for pos, cnt in state.groups[side].items():
-        for ep, e in state.groups[1 - side].items():
-            if max(abs(pos[0] - ep[0]), abs(pos[1] - ep[1])) == 1:
-                p = win_probability(cnt, e, False)
-                if p >= min_p and (best is None or p * e > best[0]):
-                    best = (p * e, (pos[0], pos[1], cnt, ep[0], ep[1]))
-    return (best[1],) if best else None

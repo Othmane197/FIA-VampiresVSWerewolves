@@ -1,12 +1,19 @@
 import socket
 import struct
-from typing import List, Tuple, Optional
+from typing import List, Optional, Tuple
+
 
 class NetworkClient:
     def __init__(self, host: str, port: int):
         self.host = host
         self.port = port
         self.sock: Optional[socket.socket] = None
+
+    def _socket(self) -> socket.socket:
+        """The connected socket (raises ConnectionError before connect() / after close())."""
+        if self.sock is None:
+            raise ConnectionError("not connected")
+        return self.sock
 
     def connect(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -16,7 +23,7 @@ class NetworkClient:
     def _recv_exact(self, num_bytes: int) -> bytes:
         buf = bytearray()
         while len(buf) < num_bytes:
-            chunk = self.sock.recv(num_bytes - len(buf))
+            chunk = self._socket().recv(num_bytes - len(buf))
             if not chunk:
                 raise ConnectionError("Socket connection closed by server")
             buf.extend(chunk)
@@ -25,7 +32,7 @@ class NetworkClient:
     def send_name(self, name: str):
         ascii_name = name.encode('ascii')
         payload = b"NME" + struct.pack("B", len(ascii_name)) + ascii_name
-        self.sock.sendall(payload)
+        self._socket().sendall(payload)
         print(f"[Network] Sent AI name: {name}")
 
     def send_moves(self, moves: List[Tuple[int, int, int, int, int]]):
@@ -36,7 +43,7 @@ class NetworkClient:
         payload.append(len(moves))
         for x1, y1, count, x2, y2 in moves:
             payload.extend(struct.pack("5B", x1, y1, count, x2, y2))
-        self.sock.sendall(payload)
+        self._socket().sendall(payload)
         print(f"[Network] Sent {len(moves)} moves: {moves}")
 
     def receive_command(self) -> Tuple[str, dict]:
@@ -77,10 +84,7 @@ class NetworkClient:
                     })
             return cmd, {"changes": changes}
 
-        elif cmd == "END":
-            return cmd, {}
-
-        elif cmd == "BYE":
+        elif cmd == "END" or cmd == "BYE":
             return cmd, {}
 
         else:

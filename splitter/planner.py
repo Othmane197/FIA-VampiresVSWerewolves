@@ -25,7 +25,6 @@ from .state import State
 
 GAMMA = 0.9          # a house d moves away is worth GAMMA**d of a house next to us
 PROTECTED = ("base", "flee", "regroup", "regroup+go", "hunt")
-PREEMPT_TAGS = ("deny", "ambush", "shield", "tempo")
 
 
 @dataclass
@@ -39,8 +38,6 @@ class PlanConfig:
     safety_margin: int = 1         # extra moves of distance required from 1.5x-bigger enemies
     reserve_ratio: float = 1.0     # main body must stay >= ratio * nearby enemy groups
     reserve_radius: int = 6        # "nearby" for the reserve rule (3 lost close-start maps)
-    split_enemy_dist: int = 0      # no split while an enemy group >= half our size is this close (0 = off)
-    prize_lock: bool = False       # no split while a house needs our concentrated army (big < h <= total)
     gamble: str = "adaptive"       # "never" | "adaptive" (only when behind) | "always"
     max_plans: int = 18
     danger_weight: float = 3.0     # steps of detour accepted to avoid one expected creature loss / size
@@ -48,8 +45,6 @@ class PlanConfig:
     commit_bonus: float = 0.35     # value bonus for keeping last turn's goal (stops oscillation)
     pincer: bool = True            # synchronized multi-group conversion of a house too big for one group
     hunt_bonus: float = 0.1        # prior bonus of the "hunt" plan (raised against splitting opponents)
-    preempt: str = ""              # pre-emptive families ("deny,ambush,shield,tempo"); off: measured -3.9 pts
-    preempt_min_prob: float = 0.3  # a predicted target must be at least this likely
 
 
 @dataclass
@@ -341,12 +336,10 @@ def _orders_value(orders) -> float:
 
 
 def generate_plans(state: State, side: int, cfg: Optional[PlanConfig] = None,
-                   behind: bool = False, intents: Optional[Dict[Pos, Pos]] = None,
-                   predictions=None) -> List[Plan]:
+                   behind: bool = False, intents: Optional[Dict[Pos, Pos]] = None) -> List[Plan]:
     """
     The short list of joint plans for `side` to move. Never empty while `side` has creatures.
     `intents` = {group cell: goal} chosen last turn (commitment, see PlanConfig.commit_bonus).
-    `predictions` = opponent_model.Predictions (adds the pre-emptive plan families, chapter 11).
     """
     intents = intents or {}
     cfg = cfg or PlanConfig()
@@ -406,7 +399,7 @@ def generate_plans(state: State, side: int, cfg: Optional[PlanConfig] = None,
     # 2. split plans
     if cfg.splits:
         for pos, cnt in groups[:cfg.split_groups]:
-            for orders, tag, bonus in _split_orders(state, side, pos, cnt, groups, enemies, cfg, assign):
+            for orders, tag, bonus in _split_orders(state, side, pos, cnt, enemies, cfg, assign):
                 add(orders, tag, bonus)
 
     # 3. regroup on the biggest group
@@ -441,12 +434,6 @@ def generate_plans(state: State, side: int, cfg: Optional[PlanConfig] = None,
         orders, _ = assign(set(), flee_fixed)
         add(orders, "flee", sum(g.value for g in flee_fixed.values()))
 
-    # 5b. pre-emptive plans from the opponent model's predicted targets (chapter 11)
-    if predictions is not None and cfg.preempt:
-        for orders, tag, bonus in _preempt_orders(state, side, enemies, predictions,
-                                                  cfg, assign):
-            add(orders, tag, bonus)
-
     # 6. gambles (only generated when allowed)
     for pos, cnt in groups[:3]:
         for g in goals_of[pos]:
@@ -459,27 +446,17 @@ def generate_plans(state: State, side: int, cfg: Optional[PlanConfig] = None,
     plans.sort(key=lambda p: -p.prior)
     # strategic alternatives are never truncated away (a lost game taught us: with 6+ groups the
     # many split/alt variants used to push the only "flee" plan out of the list)
-    protected = [p for p in plans if p.tag in PROTECTED or p.tag.startswith("pincer")
-                 or p.tag in PREEMPT_TAGS]
+    protected = [p for p in plans if p.tag in PROTECTED or p.tag.startswith("pincer")]
     others = [p for p in plans if p not in protected]
     keep = protected + others[:max(0, cfg.max_plans - len(protected))]
     keep.sort(key=lambda p: -p.prior)
     return keep
 
 
-def _split_orders(state, side, pos, cnt, groups, enemies, cfg, assign):
+def _split_orders(state, side, pos, cnt, enemies, cfg, assign):
     """Yield (orders, tag, bonus) for plans where the group at `pos` sends detachments."""
     if cnt < 2:
         return
-    # hybrid rules: keep the deathball when the enemy is close, or while a prize needs all of us
-    if cfg.split_enemy_dist and any(cheb(ep, pos) <= cfg.split_enemy_dist and 2 * e >= cnt
-                                    for ep, e in enemies.items()):
-        return
-    if cfg.prize_lock:
-        total = sum(c for _, c in groups)
-        biggest = groups[0][1]
-        if any(biggest < h <= total for h in state.humans.values()):
-            return
     # main body reserve: stay bigger than nearby enemy groups
     reserve = 0
     for ep, e in enemies.items():
@@ -542,57 +519,6 @@ def _split_orders(state, side, pos, cnt, groups, enemies, cfg, assign):
             out.append((orders + [(pos, rest, fixed_rest)] + others, f"split{len(combo)}+go", value_bonus))
         out.append((orders + others, f"split{len(combo)}", value_bonus))
     yield from out
-
-
-def _preempt_orders(state, side, enemies, predictions, cfg, assign):
-    """
-    Pre-emptive plans from the opponent model's predicted targets (opponent_model.GoalRecognizer):
-      deny    reach the house an enemy group is heading for before it does;
-      ambush  if we cannot beat it there, arrive right after it converts with >= 1.5x its new size;
-      shield  our group targeted by a bigger enemy group leaves (merge / flee) before it is in range;
-      tempo   our group targeted by a smaller enemy group holds still: the enemy steps next to it
-              and we strike first.
-    Yields (orders, tag, prior bonus). MCTS decides whether any of them is actually good.
-    """
-    wanted = set(cfg.preempt.split(","))
-    mine = state.groups[side]
-    used = set()
-    for gp in predictions.groups.values():
-        if not gp.targets or gp.pos not in enemies:
-            continue
-        (kind, tp), q = gp.targets[0]
-        if q < cfg.preempt_min_prob or tp is None:
-            continue
-        e = enemies[gp.pos]
-        if kind == "H" and tp in state.humans:
-            h = state.humans[tp]
-            eta = cheb(gp.pos, tp)
-            cands = sorted(mine.items(), key=lambda g: cheb(g[0], tp))
-            deny = next(((p, c) for p, c in cands if c >= h and cheb(p, tp) <= eta), None)
-            if deny and "deny" in wanted and (deny[0], tp) not in used:
-                used.add((deny[0], tp))
-                g = Goal("house", tp, h * GAMMA ** cheb(deny[0], tp) + 0.5 * q * e, h)
-                orders, _ = assign(set(), {deny[0]: g})
-                yield orders, "deny", 0.3 * q * (h + e)
-            elif "ambush" in wanted:
-                amb = next(((p, c) for p, c in cands if c >= 1.5 * (e + h) and cheb(p, tp) <= eta + 1), None)
-                if amb and (amb[0], tp) not in used:
-                    used.add((amb[0], tp))
-                    g = Goal("kill", tp, (e + h) * GAMMA ** cheb(amb[0], tp), int(1.5 * (e + h) + 0.999))
-                    orders, _ = assign(set(), {amb[0]: g})
-                    yield orders, "ambush", 0.3 * q * (e + h)
-        elif kind == "U" and tp in mine:
-            c = mine[tp]
-            if e >= c and "shield" in wanted and cheb(gp.pos, tp) <= 4:
-                friends = {p: n for p, n in mine.items() if p != tp}
-                flee = flee_cell(state, tp, c, [gp.pos], friends, enemies)
-                if flee is not None:
-                    orders, _ = assign(set(), {tp: Goal("flee", flee, q * c)})
-                    yield orders, "shield", 0.3 * q * c
-            elif "tempo" in wanted and cheb(gp.pos, tp) == 2 and win_probability(c, e, False) >= 0.5:
-                base = [o for o in assign(set(), {})[0] if o[0] != tp]   # everybody else as usual
-                if base:
-                    yield base, "tempo", 0.3 * q * e
 
 
 def _pincer_orders(state: State, groups, enemies):

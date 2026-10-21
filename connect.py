@@ -7,8 +7,9 @@ Usage:
     python connect.py <IP> <PORT> --name <MyBot> --delay 0.1
 """
 
-import sys
 import subprocess
+import sys
+
 
 def main():
     args = sys.argv[1:]
@@ -51,7 +52,7 @@ def main():
 
     print(f"\n[Launcher] Launching: {' '.join(cmd)}")
     try:
-        subprocess.run(cmd)
+        subprocess.run(cmd, check=False)
     except KeyboardInterrupt:
         print("\n[Launcher] Connection closed by user.")
 

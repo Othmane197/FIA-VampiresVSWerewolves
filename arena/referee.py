@@ -58,8 +58,12 @@ def state_from_dict(d: dict, rows: int, cols: int, max_ply: int = 200) -> State:
 
 def play_game(initial: State, bots: Mapping[int, Any], first: int = V, seed: Optional[int] = None,
               hard_limit: float = 2.0, verbose: bool = False, render=None,
-              record: bool = False) -> GameResult:
-    """Play one full game between two bots with the real server's rules (see module docstring)."""
+              record: bool = False, game_seconds: Optional[float] = None) -> GameResult:
+    """
+    Play one full game between two bots with the real server's rules (see module docstring).
+    game_seconds: the server's MaxGameDuration (the game ends when both bots' thinking time adds
+    up to it); None = no clock, the game ends at max_ply.
+    """
     rng = random.Random(seed)
     if seed is not None:
         random.seed(seed)                   # some bots use the global random module
@@ -73,7 +77,12 @@ def play_game(initial: State, bots: Mapping[int, Any], first: int = V, seed: Opt
     trace: List[dict] = []
     reason = "plies"
     winner: Optional[int] = None
+    clock = 0.0
     while True:
+        if game_seconds is not None and clock >= game_seconds:
+            reason = "clock"
+            winner = state.winner()
+            break
         if not state.groups[V] or not state.groups[W]:
             reason = "wipeout"
             winner = state.winner()
@@ -93,6 +102,7 @@ def play_game(initial: State, bots: Mapping[int, Any], first: int = V, seed: Opt
             break
         dt = time.perf_counter() - t0
         st.times.append(dt)
+        clock += dt
         if dt > hard_limit:
             st.timeouts += 1
             st.problem = f"timeout {dt:.2f}s at ply {state.ply}"
@@ -117,7 +127,7 @@ def play_game(initial: State, bots: Mapping[int, Any], first: int = V, seed: Opt
             st.splits += 1
         before = state
         state = state.apply(to_move, moves, rng)
-        if record:                          # ground truth for the opponent model (opponent_model.py)
+        if record:                          # full game record (tools/tune_eval.py)
             trace.append({"side": to_move, "moves": moves, "before": state_to_dict(before),
                           "after": state_to_dict(state)})
         st.max_groups = max(st.max_groups, len(state.groups[to_move]))

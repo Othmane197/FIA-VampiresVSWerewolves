@@ -25,6 +25,7 @@ class AIAgent:
     detachments). Any failure falls back to the original starter logic below.
 
     Environment knobs (optional): SPLITTER_TIME (seconds per move, default 1.5),
+    SPLITTER_MODEL=backup (play the backup model instead of the flagship, splitter.agent.MODELS),
     SPLITTER_VERBOSE=1 (print the search statistics every turn).
     """
 
@@ -35,20 +36,14 @@ class AIAgent:
         if time_limit is None:
             time_limit = float(os.environ.get("SPLITTER_TIME", "1.5"))
         try:
-            from splitter import SplitterAgent
+            from splitter.agent import MODELS, SplitterAgent
+            model = os.environ.get("SPLITTER_MODEL", "flagship")
+            options = {**MODELS.get(model, MODELS["flagship"]), **kwargs}
             self.engine = SplitterAgent(name=name, time_limit=time_limit,
-                                        verbose=os.environ.get("SPLITTER_VERBOSE") == "1", **kwargs)
+                                        verbose=os.environ.get("SPLITTER_VERBOSE") == "1", **options)
         except Exception as e:                       # e.g. a file missing on the CTI machine
             print(f"[AIAgent] Splitter unavailable ({e!r}), using the starter strategy")
             self.engine = None
-
-    def pregame(self, state: GameState) -> None:
-        """Optional pre-game analysis (main.py --pregame): see SplitterAgent.pregame."""
-        if self.engine is not None:
-            try:
-                self.engine.pregame(state, float(os.environ.get("SPLITTER_PREGAME_TIME", "2.5")))
-            except Exception as e:
-                print(f"[AIAgent] pre-game analysis skipped: {e!r}")
 
     def reset(self):
         """Forget the previous game (called by main.py on END)."""

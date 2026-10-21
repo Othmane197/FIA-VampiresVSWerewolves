@@ -1,5 +1,6 @@
 from enum import Enum
-from typing import List, Tuple, Dict, Optional
+from typing import Dict, List, Optional, Tuple
+
 
 class Species(Enum):
     VAMPIRE = "VAMPIRE"
@@ -56,11 +57,11 @@ class GameState:
                 if home_cell.vampires > 0:
                     self.our_species = Species.VAMPIRE
                     self.enemy_species = Species.WEREWOLF
-                    print(f"[GameState] Identified species: We are VAMPIRES")
+                    print("[GameState] Identified species: We are VAMPIRES")
                 elif home_cell.werewolves > 0:
                     self.our_species = Species.WEREWOLF
                     self.enemy_species = Species.VAMPIRE
-                    print(f"[GameState] Identified species: We are WEREWOLVES")
+                    print("[GameState] Identified species: We are WEREWOLVES")
 
     def get_our_groups(self) -> List[Tuple[Tuple[int, int], int]]:
         groups = []

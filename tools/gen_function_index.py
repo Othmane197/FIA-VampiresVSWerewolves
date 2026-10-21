@@ -19,18 +19,17 @@ OUT = os.path.join(ROOT, "docs", "strategy", "09_function_index.md")
 SECTIONS = [
     ("Tournament entry point", ["main.py", "ai_agent.py", "network.py", "game_state.py"]),
     ("Splitter: exact rules and state", ["splitter/rules.py", "splitter/state.py"]),
-    ("Splitter: opponent model (HMMs)", ["splitter/observe.py", "splitter/opponent_model.py"]),
     ("Splitter: plan generator", ["splitter/planner.py"]),
     ("Splitter: evaluation", ["splitter/evaluate.py"]),
     ("Splitter: search", ["splitter/mcts.py"]),
     ("Splitter: agent and safety net", ["splitter/agent.py"]),
     ("Arena (benchmarking)", ["arena/maps.py", "arena/opponents.py", "arena/referee.py", "arena/run.py",
-                              "arena/replay.py", "arena/snapshot.py", "arena/fetch_opponents.py"]),
-    ("Tools", ["tools/fake_server.py", "tools/probe_server.py", "tools/play_bot.py",
-               "tools/gen_function_index.py", "tools/opponent_report.py",
-               "tools/train_opponent_model.py"]),
+                              "arena/replay.py", "arena/snapshot.py", "arena/fetch_opponents.py",
+                              "arena/history.py"]),
+    ("Tools", ["tools/fake_server.py", "tools/server_match.py", "tools/probe_server.py", "tools/play_bot.py",
+               "tools/gen_function_index.py", "tools/tune_eval.py", "tools/informative_slots.py"]),
     ("Tests", ["tests/test_rules.py", "tests/test_planner.py", "tests/test_agent.py",
-               "tests/test_protocol.py", "tests/test_opponent_model.py"]),
+               "tests/test_protocol.py", "tests/test_arena.py"]),
 ]
 
 
@@ -90,7 +89,7 @@ LINK = re.compile(r"\[`?([A-Za-z_][\w.]*)(?:\([^)\]]*\))?`?\]\(\.\./\.\./([\w/.-
 
 
 def check_chapter_links() -> list:
-    """Every [`name`](../../file.py#Lnn) link in the chapters must point at the line defining `name`."""
+    """Every chapter link to a definition (`name` + file + #L line) must point at the line defining `name`."""
     problems = []
     folder = os.path.dirname(OUT)
     for md in sorted(os.listdir(folder)):

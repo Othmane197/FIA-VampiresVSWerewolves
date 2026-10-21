@@ -10,11 +10,24 @@ The team uses two agent interfaces; adapters translate:
     BoardBot       compute_moves(BoardState, Species)  Othmane's and Ronita's bots
     SplitterBot    SplitterAgent.choose(State, side)   our bot (fast path, true ply)
 
-Teammates' bots are loaded from arena/vendor/<branch>/ (run `python -m arena.fetch_opponents`).
-
-Splitter variants can be given inline:  "Splitter:splits=0,c=0.8,rollout_depth=0"
+Bots INSIDE the repo:
+    "Splitter"            the flagship (splitter.agent.MODELS["flagship"])
+    "Splitter-Calibrated" the backup (MODELS["backup"]: evaluation fitted on game outcomes)
+    "Splitter:k=v,..."    any variant inline, e.g. "Splitter:splits=0" (the deathball ablation),
+                          "Splitter:gamble=always,c=0.9" (an aggressive style), "Splitter:c=0.8"
+    "Snap:<version>[:k=v,..]"  a frozen copy of splitter/ (arena/snapshot.py)
+    "Styled:<n>"          a reproducible random opponent STYLE (styled_config): a third validation
+                          set against over-fitting to the teammates' bots (chapter 14)
+    teammates' bots       Apex, RaceMCTS, Expecti, Grabber, ... loaded from arena/vendor/<branch>/
+                          (run `python -m arena.fetch_opponents`)
+Bots OUTSIDE the repo:
+    "py:<path/to/bot.py>[:ClassName]"   any Python class with compute_moves(GameState) or
+                          compute_moves(BoardState, Species) (detected automatically)
+    any program, any language: tools/server_match.py plays it over the real network protocol
 """
 import importlib
+import importlib.util
+import inspect
 import os
 import sys
 from typing import Any, Callable, Dict, List
@@ -118,7 +131,7 @@ class SplitterBot(Bot):
         from splitter import SplitterAgent
         self.name = name
         self.kwargs = kwargs
-        self.agent = SplitterAgent(name=name, game_seconds=None, **kwargs)
+        self.agent = SplitterAgent(name=name, **{"game_seconds": None, **kwargs})
 
     def reset(self):
         """Forget the previous game."""
@@ -197,14 +210,42 @@ def _registry() -> Dict[str, Callable[[float], Bot]]:
 # Default sparring panel: every teammate's main bot + the most instructive simple ones
 PANEL = ["Apex", "RaceMCTS", "Expecti", "TacticalSplitter", "Grabber", "Rusher", "Greedy", "Starter"]
 
-# Named Splitter variants (ablations)
-VARIANTS = {
-    "Splitter": {},
-    "Splitter-nosplit": {"splits": False},
-    "Splitter-greedy": {"search": "greedy"},
-    "Splitter-nogamble": {"gamble": "never"},
-    "Splitter-norollout": {"rollout_depth": 0},
-}
+def _models():
+    """The two kept models, named for the arena (defined once, in splitter/agent.py)."""
+    from splitter.agent import MODELS
+    return {"Splitter": dict(MODELS["flagship"]), "Splitter-Calibrated": dict(MODELS["backup"])}
+
+
+VARIANTS = _models()
+
+
+def styled_config(n: int) -> dict:
+    """
+    Opponent style number n (deterministic): random risk taking, splitting, caution, search depth.
+    These bots share our planner, so they are not independent of our bot, but each plays a style
+    that none of the teammates' bots represents (from reckless gambler to timid deathball).
+    """
+    import random
+    r = random.Random(1000 + n)
+    cfg = {
+        "splits": r.random() < 0.7,
+        "gamble": r.choice(["never", "adaptive", "always"]),
+        "c": round(r.uniform(0.3, 1.2), 2),
+        "rollout_depth": r.choice([0, 1, 2, 3]),
+        "reserve_radius": r.randint(2, 10),
+        "safety_margin": r.randint(0, 2),
+        "max_detachments": r.randint(1, 4),
+        "danger_weight": round(r.uniform(0.5, 6.0), 2),
+        "danger_strike_p": round(r.uniform(0.25, 0.7), 2),
+        "commit_bonus": round(r.uniform(0.0, 0.8), 2),
+        "hunt_bonus": round(r.uniform(0.0, 1.0), 2),
+    }
+    if r.random() < 0.25:
+        cfg["search"] = "greedy"
+    return cfg
+
+
+STYLED_PANEL = [f"Styled:{n}" for n in range(1, 7)]
 
 
 def bot_names():
@@ -220,11 +261,56 @@ class SnapshotBot(SplitterBot):
         mod = importlib.import_module(f"arena.snapshots.splitter_{version}.agent")
         self.name = name
         self.kwargs = kwargs
-        self.agent = mod.SplitterAgent(name=name, game_seconds=None, **kwargs)
+        self.agent = mod.SplitterAgent(name=name, **{"game_seconds": None, **kwargs})
+
+
+def load_external(spec: str) -> Bot:
+    """
+    'py:<path>[:ClassName]' -> a Bot around an external Python agent class. Without ClassName the
+    first class defining compute_moves is used. The interface is detected from compute_moves'
+    signature: one argument = GameState (repo / Dana style), two = (BoardState, Species).
+    """
+    body = spec[3:]
+    path, cls_name = body, None
+    if body.count(":") >= 1 and not os.path.exists(body):      # 'file.py:Class' (keep 'C:\...' paths)
+        path, _, cls_name = body.rpartition(":")
+    path = os.path.abspath(path)
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"external bot file not found: {path}")
+    folder = os.path.dirname(path)
+    mod_name = "_external_" + "".join(c if c.isalnum() else "_" for c in path)
+    sys.path.insert(0, folder)                    # its own sibling imports
+    try:
+        spec_obj = importlib.util.spec_from_file_location(mod_name, path)
+        if spec_obj is None or spec_obj.loader is None:
+            raise ImportError(f"cannot load {path}")
+        module = importlib.util.module_from_spec(spec_obj)
+        spec_obj.loader.exec_module(module)
+    finally:
+        sys.path.remove(folder)
+    if cls_name is None:
+        found = [c for _, c in inspect.getmembers(module, inspect.isclass)
+                 if c.__module__ == module.__name__ and hasattr(c, "compute_moves")]
+        if not found:
+            raise ValueError(f"no class with compute_moves in {path}")
+        cls: Any = found[0]
+    else:
+        cls = getattr(module, cls_name)
+    n_args = len(inspect.signature(cls.compute_moves).parameters) - 1       # minus self
+
+    def factory():
+        try:
+            return cls()
+        except TypeError:
+            return cls(cls.__name__)               # constructors that require a name
+    label = f"{os.path.basename(path)}:{cls.__name__}"
+    return BoardBot(label, factory) if n_args >= 2 else GameStateBot(label, factory)
 
 
 def make_bot(spec: str, time_limit: float = 0.3) -> Bot:
-    """spec: a registry name, a Splitter variant, 'Splitter:key=val,key=val' or 'Snap:<version>[:k=v,..]'."""
+    """spec: registry name, Splitter variant, 'Splitter:k=v,..', 'Snap:<version>[:k=v,..]' or 'py:<file>[:Class]'."""
+    if spec.startswith("py:"):
+        return load_external(spec)
     if spec.startswith("Snap:"):
         _, version, *rest = spec.split(":")
         kwargs = {}
@@ -233,6 +319,10 @@ def make_bot(spec: str, time_limit: float = 0.3) -> Bot:
             kwargs[k.strip()] = _parse_value(v.strip())
         kwargs.setdefault("time_limit", time_limit)
         return SnapshotBot(spec, version, kwargs)
+    if spec.startswith("Styled:"):
+        kwargs = styled_config(int(spec.split(":")[1]))
+        kwargs["time_limit"] = time_limit
+        return SplitterBot(spec, kwargs)
     name, _, args = spec.partition(":")
     if name in VARIANTS or name.startswith("Splitter"):
         kwargs = dict(VARIANTS.get(name, {}))

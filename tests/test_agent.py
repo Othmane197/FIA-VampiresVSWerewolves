@@ -76,6 +76,64 @@ class TestSafety(unittest.TestCase):
                 self.assertTrue(ok, f"{why} {moves} {s}")
                 self.assertIsNone(a.last_error, a.last_error)
 
+    def test_backup_model_never_illegal(self):
+        from splitter.agent import MODELS
+        rng = random.Random(5)
+        a = SplitterAgent(time_limit=0.03, seed=2, game_seconds=None, **MODELS["backup"])
+        self.assertEqual((a.ev.discount, a.ev.k0, a.ev.k1), (0.845, 8.5, 27.0))
+        for i in range(40):
+            rows, cols = rng.randint(3, 12), rng.randint(3, 16)
+            cells = rng.sample([(x, y) for x in range(cols) for y in range(rows)], min(rows * cols, 9))
+            s = State(rows, cols, {c: rng.randint(1, 20) for c in cells[2:5]} if i % 4 else {},
+                      {cells[0]: rng.randint(1, 40), **({cells[5]: rng.randint(1, 9)} if i % 2 else {})},
+                      {cells[1]: rng.randint(1, 40), **({cells[6]: rng.randint(1, 9)} if i % 3 else {})},
+                      rng.randint(0, 190))
+            for side in (V, W):
+                moves = a.choose(s.copy(), side)
+                ok, why = check_moves(s.rows, s.cols, s.groups[side], moves)
+                self.assertTrue(ok, f"{why} {moves} {s}")
+                self.assertIsNone(a.last_error, a.last_error)
+
+    def test_tournament_client_selects_the_model(self):
+        from ai_agent import AIAgent
+        old = os.environ.get("SPLITTER_MODEL")
+        try:
+            os.environ["SPLITTER_MODEL"] = "backup"
+            engine = AIAgent("x", time_limit=0.05).engine
+            assert engine is not None
+            self.assertEqual(engine.ev.k1, 27.0)
+            os.environ["SPLITTER_MODEL"] = "flagship"
+            engine = AIAgent("x", time_limit=0.05).engine
+            assert engine is not None
+            self.assertEqual(engine.ev.k1, 14.0)
+        finally:
+            if old is None:
+                os.environ.pop("SPLITTER_MODEL", None)
+            else:
+                os.environ["SPLITTER_MODEL"] = old
+
+    def test_watchdog_sends_the_fallback_when_late(self):
+        import main
+
+        class Slow:
+            def __init__(self):
+                self.calls = 0
+
+            def compute_moves(self, _state):
+                self.calls += 1
+                time.sleep(0.5)
+                return [(0, 0, 1, 1, 1)]
+
+        slow = Slow()
+        dog = main.Watchdog(0.2)
+        self.assertIsNone(dog.decide(slow, None, time.time()))     # too late -> fallback
+        self.assertIsNone(dog.decide(slow, None, time.time()))     # still running: not called again
+        self.assertEqual(slow.calls, 1)
+        time.sleep(0.4)
+        dog.limit = 2.0
+        self.assertEqual(dog.decide(slow, None, time.time()), [(0, 0, 1, 1, 1)])
+        self.assertEqual(dog.late, 1)
+
     def test_gamestate_interface(self):
         from ai_agent import AIAgent
         s = load_xml("testmap.xml")

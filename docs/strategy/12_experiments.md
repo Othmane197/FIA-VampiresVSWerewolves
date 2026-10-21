@@ -4,8 +4,12 @@
 baseline, **without over-fitting to our teammates' bots** (the tournament opponents are other
 students' bots we have never seen).
 
-**Baseline:** Splitter v6e defaults = v5 plus the open-loop search fix (chapter 11.7). That fix
-alone is +2.2 points over v5.
+**Baseline:** Splitter v6 defaults = v5 plus the open-loop search fix (chapter 11.8). That fix
+alone is +2.2 points over v5. It is today's flagship "Splitter" (frozen as `Snap:v7`).
+
+**Names used below.** The candidates were switches of the v6 code; all of them except the
+runner-up have since been deleted from the code (chapter 10.5). "Opponent model without search
+steering" (`opponent_model=1,opp_priors=0` at the time) is exactly today's **"Splitter-HMM"**.
 
 ## 12.1 Method
 
@@ -79,9 +83,9 @@ effect on unseen opponents and maps**, so it was rejected.
 
 | Change | Tuning set | Unseen data (pooled) | Decision |
 |---|---|---|---|
-| **Open-loop expansion fix** (chapter 11.7) | — | **+2.2 pts** over v5 on 504 paired games; **61.6%** head-to-head vs v5; clear mechanism (4.1% of turns were lost) | **adopted (default)** |
-| Opponent model without search steering | +7.4, +10.4 | about **+0.6 ± 1.1**: B +1.8 ± 2.0, C +1.8 ± 1.7, confirmatory −3.4 ± 2.5 | off (opt-in) |
-| Kiting + rollout depth 0 | +11.3 | −0.6 ± 2.0 | rejected |
+| **Open-loop expansion fix** (chapter 11.8) | — | **+2.2 pts** over v5 on 504 paired games; **61.6%** head-to-head vs v5; clear mechanism (4.1% of turns were lost) | **adopted (default)** |
+| Opponent model without search steering | +7.4, +10.4 | about **+0.6 ± 1.1**: B +1.8 ± 2.0, C +1.8 ± 1.7, confirmatory −3.4 ± 2.5 | **kept as the runner-up "Splitter-HMM"** (opt-in) |
+| Kiting + rollout depth 0 | +11.3 | −0.6 ± 2.0 | rejected, code deleted |
 | Every other parameter change | within ±3 | — | defaults kept |
 
 **Lesson for the report.** Picking the best of 14 candidates on one set of games always produces
@@ -101,3 +105,16 @@ best both failed it. The only change that survived is the one with a clear mecha
   - gamblers: rollouts include their strikes.
 - **Steering which replies are searched (I1) is what hurt,** because it under-explored the strong opponents' dangerous replies. It stays off.
 - **On fresh dice the risk-model gain did not replicate.** The mechanism is plausible, but on our panel the effect is too small to measure. It remains an opt-in switch for opponents unlike our teammates' bots.
+
+## 12.5 Final selection of campaign 1 (superseded by chapter 14)
+
+Campaign 2 kept the flagship and **retired the runner-up below** (−11.9 ± 4.1 pooled at 1.5 s),
+replacing it as the backup by the calibrated evaluation (chapter 14.4).
+
+| Rank | Strategy | Why |
+|---|---|---|
+| 1 | **Splitter** (flagship, `main.py` default) | The only change that survived every stage, with a clear mechanism; simplest, fastest, no dependence on how well the opponent is read |
+| 2 | **Splitter-HMM** (runner-up) | Best experimental variant: strong on the tuning set and against the two style proxies, neutral on pooled unseen data at 0.2 s. **At 1.5 s it is clearly below the flagship (−14.8 ± 4.9), still above the deathball (chapter 08.2)**, so it is a research configuration, not a tournament one |
+
+Everything else was deleted from the code; the results stay in chapters 08, 10.5, 11.6–11.7 and
+here, and the code in commit `79fd09c`.

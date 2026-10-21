@@ -10,14 +10,24 @@ A clean, lightweight, and complete Python template to connect to the official ga
 `main.py` now plays **The Splitter** (`ai_agent.AIAgent` → [`splitter/`](splitter/)). Full strategy documentation (every algorithm, script and function): [docs/strategy/](docs/strategy/README.md). Real-server rules (probed and disassembled, with differences from the PDF): [docs/SERVER_FINDINGS.md](docs/SERVER_FINDINGS.md).
 
 ```bash
-python main.py <IP> <PORT> --name MyTeam                 # tournament (1.5 s/move; SPLITTER_TIME=1.2 to change)
-python -m unittest discover tests                        # 24 tests incl. end-to-end protocol vs tools/fake_server.py
+python main.py <IP> <PORT> --name MyTeam                 # tournament: the flagship (1.5 s/move, watchdog at 1.8 s)
+SPLITTER_MODEL=backup python main.py <IP> <PORT>         # the backup model (calibrated evaluation)
+python -m unittest discover tests                        # 37 tests incl. end-to-end protocol vs tools/fake_server.py
 python tools/gen_function_index.py --check               # docs/strategy line links still match the code
 python -m arena.fetch_opponents                          # copy teammates' bots from their branches (once)
-python -m arena.run --games 2 --time 0.2                 # benchmark vs the panel on 14 maps, both species
-python -m arena.run --bot Splitter-nosplit --opp Apex    # variants / ablations ("Splitter:c=0.8,gamble=never")
+python -m arena.run --games 2 --time 0.2                 # flagship vs the panel on 14 maps, both species
+python -m arena.run --bot Splitter Splitter-Calibrated --slots arena/slots/holdout.json --drop-worse --time 0.25
+                                                         # paired comparison on the informative games only (2-3x faster)
+python -m arena.run --opp "py:../Other/ai_agent.py"      # any external Python bot file
+python tools/server_match.py --a "python main.py {host} {port}" --b "<any client cmd> {host} {port}"
+python -m arena.history                                  # every stored run and comparison
 python tools/play_bot.py Apex 127.0.0.1 5555             # any arena bot on the real server GUI
 ```
+
+Two models are kept: the flagship **Splitter** (what `main.py` plays) and the backup
+**Splitter-Calibrated** (the same bot with its evaluation fitted on game outcomes). How they were
+chosen: [docs/strategy/14_campaign2.md](docs/strategy/14_campaign2.md); every idea that failed, so
+it is not retried: [docs/strategy/15_failed_strategies.md](docs/strategy/15_failed_strategies.md).
 
 ---
 

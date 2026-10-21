@@ -17,11 +17,10 @@ Faithfully implements the rules specified in Projectv10.pdf:
 - Turn limit and victory conditions
 """
 
-import math
 import random
-from copy import deepcopy
-from typing import Dict, List, Tuple, Optional, Set
-from game_state import Species, Cell
+from typing import Dict, List, Optional, Set, Tuple
+
+from game_state import Species
 
 # Directions (8 adjacent neighbors)
 DIRECTIONS = [(-1, -1), (-1, 0), (-1, 1),
@@ -55,7 +54,7 @@ class BoardState:
     """
     Lightweight, fast board state representation for game search and simulation.
     """
-    __slots__ = ('rows', 'cols', 'grid', 'turn_count', 'max_turns')
+    __slots__ = ('cols', 'grid', 'max_turns', 'rows', 'turn_count')
 
     def __init__(self, rows: int, cols: int, max_turns: int = 200):
         self.rows = rows
@@ -83,7 +82,7 @@ class BoardState:
     def get_species_groups(self, species: Species) -> List[Tuple[Tuple[int, int], int]]:
         groups = []
         is_vampire = (species == Species.VAMPIRE)
-        for pos, (h, v, w) in self.grid.items():
+        for pos, (_h, v, w) in self.grid.items():
             cnt = v if is_vampire else w
             if cnt > 0:
                 groups.append((pos, cnt))
@@ -92,13 +91,13 @@ class BoardState:
     def get_species_total(self, species: Species) -> int:
         is_vampire = (species == Species.VAMPIRE)
         tot = 0
-        for (h, v, w) in self.grid.values():
+        for (_h, v, w) in self.grid.values():
             tot += (v if is_vampire else w)
         return tot
 
     def get_humans(self) -> List[Tuple[Tuple[int, int], int]]:
         humans = []
-        for pos, (h, v, w) in self.grid.items():
+        for pos, (h, _v, _w) in self.grid.items():
             if h > 0:
                 humans.append((pos, h))
         return humans
