@@ -78,6 +78,14 @@ def make_symmetric_map(seed: int, rows: int, cols: int, army: int, n_pairs: int,
     return board
 
 
+def make_server_like_map(seed: int, rows: int, cols: int, n_pairs: int) -> BoardState:
+    """Map in the style of the professor's MapGenerator.exe (read from its IL, not run): point
+    symmetric, human groups of 1..19 in mirrored pairs, one army of 2..19 per side (mirrored).
+    The grid size and the number of groups are free parameters of the generator, so they are ours."""
+    army = random.Random(seed * 7919 + 1).randint(2, 19)
+    return make_symmetric_map(seed, rows, cols, army, n_pairs, human_max=19)
+
+
 # (name, seed, rows, cols, army, pairs, human_max, center_group)
 _GENERATED = [
     ("g5x10a", 1, 5, 10, 4, 3, 4, None),
@@ -89,6 +97,13 @@ _GENERATED = [
     ("g11x21b", 7, 11, 21, 12, 5, 8, 14),
     ("g15x29a", 8, 15, 29, 10, 6, 6, 20),
     ("g15x29b", 9, 15, 29, 14, 7, 8, None),
+]
+_SERVER_LIKE = [                                         # (name, seed, rows, cols, pairs)
+    ("s6x8", 21, 6, 8, 2),
+    ("s8x12", 22, 8, 12, 4),
+    ("s10x10", 23, 10, 10, 5),
+    ("s12x18", 24, 12, 18, 6),
+    ("s14x20", 25, 14, 20, 8),
 ]
 _GIVEN = ["thetrap.xml", "testmap.xml", "testmap2.xml"]
 
@@ -102,6 +117,8 @@ def build_suite() -> List[Tuple[str, BoardState]]:
         suite = [(p.replace(".xml", ""), load_map(p)) for p in _GIVEN]
         for name, seed, rows, cols, army, pairs, hmax, centre in _GENERATED:
             suite.append((name, make_symmetric_map(seed, rows, cols, army, pairs, hmax, centre)))
+        for name, seed, rows, cols, pairs in _SERVER_LIKE:
+            suite.append((name, make_server_like_map(seed, rows, cols, pairs)))
         _cache = suite
     return _cache
 

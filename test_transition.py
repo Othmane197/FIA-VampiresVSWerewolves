@@ -1,5 +1,6 @@
 """Run with:  python3 test_transition.py   (from the repo folder)"""
 import random
+from server_rules import perform_moves
 
 from game_engine import BoardState
 from game_state import Species
@@ -98,13 +99,13 @@ for path in ("thetrap.xml", "testmap.xml"):
                 assert board.grid == before
                 if count_random_battles(board, turn, sp) == 0:
                     assert len(outs) == 1
-                    engine = board.apply_moves(turn, sp, deterministic=False)
+                    engine = perform_moves(board, sp, turn)
                     assert outs[0][1].grid == engine.grid, (turn, outs[0][1].grid, engine.grid)
                     assert outs[0][1].turn_count == engine.turn_count
                     checked_certain += 1
                 else:
                     checked_random += 1
-            board = board.apply_moves(rng.choice(turns), sp, deterministic=False)
+            board = perform_moves(board, sp, rng.choice(turns))
             sp = W if sp == V else V
 print(f"OK  fuzz: {checked_certain} certain turns identical to the engine, {checked_random} random turns sum to 1")
 print("\nAll tests passed.")

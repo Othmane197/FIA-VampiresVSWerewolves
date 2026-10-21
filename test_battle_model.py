@@ -31,12 +31,24 @@ print("OK  win probability matches the spec and game_engine.py")
 assert certain_outcome(5, 4, True) == (1.0, 9, 0, 0)       # humans: 5 >= 4 -> convert all
 assert certain_outcome(4, 4, True) == (1.0, 8, 0, 0)       # humans: equal is enough
 assert certain_outcome(6, 4, False) == (1.0, 6, 0, 0)      # monsters: 6 >= 1.5*4
-assert certain_outcome(4, 6, False) == (1.0, 0, 6, 0)      # monsters: 6 >= 1.5*4, attackers die
+assert certain_outcome(4, 6, False) is None                # NO certain loss on the real server (4 v 6 = 1/3)
 assert certain_outcome(5, 4, False) is None                # 5 v 4 monsters is a real gamble
 assert certain_outcome(3, 4, True) is None
 for level in ("mean", "two", "full"):
     assert battle_outcomes(6, 4, False, level) == [(1.0, 6, 0, 0)]
 print("OK  certain battles")
+
+# 2b) Same probabilities as the port of the official server, for every battle up to 40 v 40.
+from server_rules import win_probability as server_p
+for e1 in range(1, 41):
+    for e2 in range(1, 41):
+        for humans in (True, False):
+            if humans and e1 >= e2 or (not humans and e1 >= 1.5 * e2):
+                continue                                    # certain: no probability needed
+            assert close(win_probability(e1, e2), server_p(e1, e2, humans)), (e1, e2, humans)
+two = battle_outcomes(3, 5, False, "two")
+assert close(sum(o.prob for o in two), 1.0) and close(sorted(o.prob for o in two)[0], 0.3)
+print("OK  win probabilities identical to server_rules; 3 v 5 monsters is a 30% battle, not a certain loss")
 
 # 3) Probabilities sum to 1 for every battle, every level.
 for e1 in range(1, 26):
@@ -77,8 +89,6 @@ def simulate(e1, e2, humans, rng):
         return e1 + e2, 0, 0
     if not humans and e1 >= 1.5 * e2:
         return e1, 0, 0
-    if not humans and e2 >= 1.5 * e1:
-        return 0, e2, 0
     p = win_probability(e1, e2)
     if rng.random() < p:                                    # attackers win
         surviving_attackers = sum(rng.random() < p for _ in range(e1))

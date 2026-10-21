@@ -19,7 +19,8 @@ How a turn is resolved (same order as game_engine.apply_moves):
      This keeps the tree small. It is an approximation (averaging blurs thresholds),
      but a turn rarely contains more than two real gambles.
 
-Assumption (not verified on the real server): attackers all die when they lose a battle.
+Verified in the server DLL: attackers all die when they lose, and there is no certain loss for monsters
+(an outnumbered attack still wins with probability E1 / (2 E2)). Arrivals on one cell are pooled.
 Survivor counts are rounded to whole creatures (battle_model level "two").
 """
 from typing import Dict, List, Tuple

@@ -20,13 +20,15 @@ We keep a short, ranked list built from these ideas (our design, not from the co
        humans:   as many as the humans (E1 >= E2 converts for sure)
        monsters: ceil(1.5 * defenders) (E1 >= 1.5 * E2 kills for sure)
      (only if that is smaller than the whole group, so a reserve stays behind).
- Plus the option "stay".
+ Plus the option "stay", and SPLIT options: "just enough" to a certain attack and the rest of the
+ group to another kept direction (the official server allows several moves from one cell as long
+ as the total does not exceed the creatures there).
 
- Joint turns are enumerated best-first and filtered by these rules:
-   * Rules 1-6 of the spec (at least one move; no cell is both source and target; ...),
-   * SAFE ASSUMPTIONS, until verified on the real server:
-       - at most ONE move per source cell,
-       - no two moves into the same cell holding humans or enemy monsters.
+ Joint turns are enumerated best-first and filtered by the rules of the official server
+ (read from VVSW.Model.dll, see server_rules.py):
+   * at least one move; no cell is both source and target; per-source total <= creatures there,
+   * several groups MAY attack the same cell: they are pooled into one attacking force, so two
+     groups that are each too weak can together reach the certain-win threshold.
  The result is capped at `max_candidates` turns and ordered so that promising turns come
  first (useful later for alpha-beta pruning).
 """
@@ -59,8 +61,8 @@ def needed_force(defenders: int, defenders_are_humans: bool) -> int:
 
 def _group_options(board: BoardState, pos: Pos, count: int, species: Species,
                    goals: List[Tuple[Pos, int, bool]], enemy_groups: List[Tuple[Pos, int]],
-                   max_directions: int, nearest_goals: int) -> List[Tuple[tuple, Optional[Move]]]:
-    """Ranked options for ONE group: list of (rank_key, move); move None means 'stay'."""
+                   max_directions: int, nearest_goals: int) -> List[Tuple[tuple, List[Move]]]:
+    """Ranked options for ONE group: list of (rank_key, moves); an empty list means 'stay'."""
     x, y = pos
     en = 2 if species == Species.VAMPIRE else 1          # index of enemy monsters in a cell tuple
     neighbors = board.get_neighbors(pos)
@@ -111,7 +113,8 @@ def _group_options(board: BoardState, pos: Pos, count: int, species: Species,
         if quiet:
             chosen.append((min(quiet, key=sidestep_key), ("wait", None, 0)))
 
-    options: List[Tuple[tuple, Optional[Move]]] = []
+    options: List[Tuple[tuple, List[Move]]] = []
+    certain_attacks = []                                 # (key, dst, need) for the split options
     for dst, (kind, is_humans, size) in chosen:
         amounts = [count]
         if kind not in ("flee", "wait"):
@@ -124,30 +127,34 @@ def _group_options(board: BoardState, pos: Pos, count: int, species: Species,
                 o = expected_outcome(a, size, is_humans)
                 delta = (o.friendly - a) + (0 if is_humans else size - o.enemy)
                 key = (0, -delta) if delta > 0 else (4, -delta)
+                if a < count and a >= needed_force(size, is_humans):
+                    certain_attacks.append((key, dst, a))
             elif kind == "flee":
                 key = (1, 0)
             elif kind == "wait":
                 key = (3, 1)
             else:
                 key = (2, 0)
-            options.append((key, move))
-    options.append(((3, 0), None))                       # stay
+            options.append((key, [move]))
+
+    # SPLIT: the smallest certain attack on one target, the rest of the group to another direction.
+    for key, atk_dst, a in certain_attacks:
+        if key[0] != 0:
+            continue
+        for dst, (kind, _, _) in chosen:
+            if dst == atk_dst or kind == "attack":
+                continue                                 # the rest goes somewhere quiet or toward a goal
+            options.append(((key[0], key[1] + 0.01),
+                            [(x, y, a, atk_dst[0], atk_dst[1]), (x, y, count - a, dst[0], dst[1])]))
+    options.append(((3, 0), []))                         # stay
     options.sort(key=lambda o: o[0])                     # stable: ties keep creation order
     return options
 
 
-def _compatible(moves: Turn, occupied: Set[Pos]) -> bool:
+def _compatible(moves: Turn) -> bool:
+    """Rule 5: no cell is both a source and a target. (Pooled attacks and merges are allowed.)"""
     sources = {(m[0], m[1]) for m in moves}
-    seen: Set[Pos] = set()
-    for m in moves:
-        dst = (m[3], m[4])
-        if dst in sources:                               # Rule 5
-            return False
-        if dst in occupied:                              # safe assumption: no double attack
-            if dst in seen:
-                return False
-            seen.add(dst)
-    return True
+    return all((m[3], m[4]) not in sources for m in moves)
 
 
 def generate_turns(board: BoardState, species: Species, max_candidates: int = 100,
@@ -160,7 +167,6 @@ def generate_turns(board: BoardState, species: Species, max_candidates: int = 10
     enemy = Species.WEREWOLF if species == Species.VAMPIRE else Species.VAMPIRE
     enemy_groups = board.get_species_groups(enemy)
     goals = [(p, c, True) for p, c in board.get_humans()] + [(p, c, False) for p, c in enemy_groups]
-    occupied = {p for p, _ in board.get_humans()} | {p for p, _ in enemy_groups}
 
     per_group = [_group_options(board, pos, cnt, species, goals, enemy_groups,
                                 max_directions, nearest_goals) for pos, cnt in ours]
@@ -174,8 +180,8 @@ def generate_turns(board: BoardState, species: Species, max_candidates: int = 10
     while heap and len(turns) < max_candidates and expansions < max_expansions:
         cost, idx = heapq.heappop(heap)
         expansions += 1
-        moves = [opts[i][1] for opts, i in zip(per_group, idx) if opts[i][1] is not None]
-        if moves and _compatible(moves, occupied):
+        moves = [m for opts, i in zip(per_group, idx) for m in opts[i][1]]
+        if moves and _compatible(moves):
             turns.append(moves)
         for j in range(len(idx)):
             if idx[j] + 1 < len(per_group[j]):

@@ -43,12 +43,21 @@ moves = all_moves(generate_turns(b, V))
 assert (2, 0, 5, 3, 0) in moves and not any(m[2] == 6 for m in moves)
 print("OK  monsters: 1.5x just-enough, only whole group when too weak")
 
-# 4) Safety rule: two groups never attack the same occupied cell together.
-b = board_from(1, 3, {(0, 0): (0, 5, 0), (2, 0): (0, 5, 0), (1, 0): (3, 0, 0)})
+# 4) Pooled attacks are now generated (the official server pools arrivals): two groups of 2 are each
+#    too weak for 4 werewolves (2 < 6), together they are not either (4 < 6), but with 3+3 vs 4 they are.
+b = board_from(1, 3, {(0, 0): (0, 3, 0), (2, 0): (0, 3, 0), (1, 0): (0, 0, 4)})
 turns = generate_turns(b, V)
-assert turns and all(sum(1 for m in t if (m[3], m[4]) == (1, 0)) <= 1 for t in turns)
-assert any((0, 0, 5, 1, 0) in t for t in turns) and any((2, 0, 5, 1, 0) in t for t in turns)
-print("OK  no double attack on one target")
+assert any((0, 0, 3, 1, 0) in t and (2, 0, 3, 1, 0) in t for t in turns), "no pooled attack among the turns"
+from server_rules import check_moves
+assert all(check_moves(b, V, t) is None for t in turns)
+print("OK  pooled attack (3 + 3 vs 4 monsters) is among the candidates, all turns legal")
+
+# 4b) Split: 9 vampires next to 2 humans and an empty cell: 2 convert, 7 go elsewhere.
+b = board_from(3, 3, {(1, 1): (0, 9, 0), (0, 1): (2, 0, 0), (2, 0): (0, 0, 3)})
+turns = generate_turns(b, V)
+assert any(len([m for m in t if (m[0], m[1]) == (1, 1)]) == 2 for t in turns), "no split option"
+assert all(check_moves(b, V, t) is None for t in turns)
+print("OK  split option (convert with just enough, send the rest elsewhere)")
 
 # 5) A guaranteed conversion is among the first turns, even with many groups (candidate cap too).
 cells = {(0, 0): (0, 6, 0), (1, 0): (3, 0, 0)}                  # 6 vampires next to 3 humans

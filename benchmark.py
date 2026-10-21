@@ -2,7 +2,8 @@
 benchmark.py  (our own file)
 
 Measures how strong a configuration of our bot is: it plays the whole panel (sparring_agents.py)
-on the whole map suite (maps.py), as BOTH species, alternating who moves first, with fixed seeds.
+on the whole map suite (maps.py), as BOTH species, with fixed seeds. Vampires always move first (official server); an illegal or empty
+turn loses the game at once.
 
     python3 benchmark.py                       # baseline: depth 2, race_weight 0.5
     python3 benchmark.py --depth 3 --race 0.3  # try another configuration
@@ -41,7 +42,7 @@ def _play_one(task) -> Row:
     ours = V if ours_is_vampire else W
     theirs = W if ours_is_vampire else V
     agents = {ours: SearchAgent("Ours", **cfg), theirs: make_opponent(opp)}
-    r = play_game(board, agents, first=ours if first_is_ours else theirs, seed=seed)
+    r = play_game(board, agents, first=V, seed=seed)       # vampires always start
     if r.winner is None:
         score = 0.5
     else:

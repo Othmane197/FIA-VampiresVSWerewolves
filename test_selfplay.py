@@ -33,13 +33,23 @@ def line_board(v, w, max_turns=200):
 
 
 # 1) Scripted win. 6 vampires vs 4 werewolves: 6 >= 1.5*4, so the attack is a guaranteed kill.
-r = play_game(line_board(6, 4), {V: StepTowardEnemy(), W: DoNothing()})
-assert r.winner == V and (r.vampires, r.werewolves) == (6, 0), r
-assert r.plies == 5                                 # V moves at plies 1, 3, 5; W is skipped twice
-assert r.stats[W].illegal == 2 and r.stats[V].illegal == 0
-print("OK  scripted attack: guaranteed kill, werewolves' empty moves counted as illegal (Rule 1)")
+r = play_game(line_board(6, 4), {V: StepTowardEnemy(), W: StepTowardEnemy()})
+assert r.winner == V and r.forfeit is None, r
+print("OK  scripted game ends with a winner")
 
-# 2) Timeouts are counted and the late moves are ignored.
+b2 = BoardState(1, 2)
+b2.set_cell((0, 0), 0, 6, 0)
+b2.set_cell((1, 0), 0, 0, 4)
+r = play_game(b2, {V: StepTowardEnemy(), W: DoNothing()})
+assert r.winner == V and r.plies == 1 and (r.vampires, r.werewolves) == (6, 0) and r.forfeit is None
+print("OK  guaranteed kill 6 v 4 wipes the werewolves out on the first ply")
+
+# 1b) An EMPTY turn loses the game at once (official server: the player "stayed static").
+r = play_game(line_board(6, 4), {V: StepTowardEnemy(), W: DoNothing()})
+assert r.winner == V and r.forfeit == W and r.plies == 1 and r.stats[W].illegal == 1, r
+print("OK  empty turn = immediate loss (forfeit)")
+
+# 2) Timeouts are counted and the late moves are ignored (the turn is skipped, the game goes on).
 class Slow:
     def compute_moves(self, state):
         time.sleep(0.03)
@@ -50,7 +60,7 @@ assert r.stats[V].timeouts == 3 and r.stats[W].timeouts == 3
 assert (r.vampires, r.werewolves) == (5, 5) and r.winner is None and r.plies == 6
 print("OK  timeouts counted, late moves ignored, game ends at the ply limit (draw 5 v 5)")
 
-# 3) Illegal moves (Rule 3: moving more creatures than present) and crashes are caught, not fatal.
+# 3) Illegal moves (more creatures than present) and crashes lose the game at once.
 class TooMany:
     def compute_moves(self, state):
         (x, y), count = state.get_our_groups()[0]
@@ -61,9 +71,10 @@ class Crashes:
         raise RuntimeError("boom")
 
 r = play_game(line_board(5, 5, max_turns=4), {V: TooMany(), W: Crashes()})
-assert r.stats[V].illegal == 2 and "Rule 3" in r.stats[V].last_problem
-assert r.stats[W].crashes == 2
-print("OK  illegal moves and crashes are counted")
+assert r.forfeit == V and r.winner == W and r.stats[V].illegal == 1 and "creatures from" in r.stats[V].last_problem
+r = play_game(line_board(5, 5, max_turns=4), {V: StepTowardEnemy(), W: Crashes()})
+assert r.forfeit == W and r.winner == V and r.stats[W].crashes == 1
+print("OK  illegal move and crash: the offender loses immediately")
 
 # 4) Same seed -> same game (needed to replay and debug a game).
 trap = load_map("thetrap.xml")

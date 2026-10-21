@@ -7,13 +7,13 @@ chance (the "chance nodes" of expectiminimax).
 Rules used (Projectv10.pdf, section "Random battle"), attackers E1 against defenders E2:
   * humans:   E1 >= E2        -> certain conversion of everybody: E1 + E2 friendly creatures
   * monsters: E1 >= 1.5 * E2  -> certain win, no losses
-              E2 >= 1.5 * E1  -> certain loss, defenders untouched
-  * otherwise the attackers win with probability P:
+  * otherwise the attackers win with probability P (there is NO certain loss: the official server,
+    read from VVSW.Model.dll, gives 3 attackers against 5 monsters a 30% chance, see server_rules.py):
         E1 == E2 : P = 0.5 | E1 < E2 : P = E1 / (2 * E2) | E1 > E2 : P = E1 / E2 - 0.5
       - attackers win : each attacker survives with probability P; against humans each human
                         also survives AND is converted with probability P
       - attackers lose: every attacker dies, each defender survives with probability 1 - P
-        (assumption: the spec does not say that all attackers die on a loss; to verify on the server)
+        (verified in the server DLL)
 
 Because every creature survives independently, survivor counts are binomial:
   win vs humans   : friendly ~ Bin(E1 + E2, P)   (attackers and converted humans, same P)
@@ -71,9 +71,7 @@ def certain_outcome(attackers: int, defenders: int, target_is_humans: bool):
         return None
     if attackers >= 1.5 * defenders:
         return Outcome(1.0, attackers, 0, 0)
-    if defenders >= 1.5 * attackers:
-        return Outcome(1.0, 0, defenders, 0)
-    return None
+    return None                                          # no certain loss on the real server
 
 
 def battle_outcomes(attackers: int, defenders: int, target_is_humans: bool,

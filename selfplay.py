@@ -9,10 +9,12 @@ An agent is any object with   compute_moves(state: GameState) -> list of
 
 Run a demo:   python3 selfplay.py            (or: python3 selfplay.py 20   for 20 games per side)
 
-Assumptions NOT yet checked against the real server (see notes in the chat):
-  * which species moves first (setting `first`, default vampires);
-  * battles follow the engine's Monte-Carlo mode (game_engine.apply_moves, deterministic=False);
-  * an illegal / late / crashed turn is treated as a skipped turn (the real server may differ).
+Rules (read from the official server's VVSW.Model.dll, implemented in server_rules.py):
+  * vampires move first (setting `first`, default vampires), 200 plies, then the larger total wins;
+  * moves are validated by server_rules.check_moves and executed by server_rules.perform_moves
+    (pooled attacks, no certain loss, per-creature binomial survivors);
+  * an illegal or EMPTY turn, or a crash, loses the game at once (the server's "cheating" rule);
+  * a turn that takes longer than the limit is skipped (the server moves on without our answer).
 """
 import random
 import sys
@@ -23,6 +25,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 from game_engine import BoardState
 from game_state import Species
 from map_loader import load_map
+from server_rules import check_moves, perform_moves
 from state_converter import state_from_board
 
 TIME_LIMIT = 2.0  # seconds per turn (project specification)
@@ -49,6 +52,7 @@ class GameResult:
     werewolves: int
     humans_left: int
     stats: Dict[Species, PlayerStats]
+    forfeit: Optional[Species] = None   # the side that lost by an illegal/empty turn or a crash
 
 
 def _start_cell(board: BoardState, species: Species) -> Optional[Tuple[int, int]]:
@@ -61,11 +65,13 @@ def play_game(initial: BoardState, agents: Dict[Species, object], first: Species
               deterministic_battles: bool = False, verbose: bool = False) -> GameResult:
     """Play one full game from `initial` (it is not modified)."""
     if seed is not None:
-        random.seed(seed)
+        random.seed(seed)                          # for agents that use the global random module
+    rng = random.Random(seed)                      # dice of the battles
     board = initial.clone()
     homes = {sp: _start_cell(initial, sp) for sp in Species}
     stats = {sp: PlayerStats() for sp in Species}
     current = first
+    forfeit = None
 
     while not board.is_game_over()[0]:
         agent, st = agents[current], stats[current]
@@ -85,19 +91,23 @@ def play_game(initial: BoardState, agents: Dict[Species, object], first: Species
             st.timeouts += 1
             st.last_problem = f"timeout: {dt:.2f}s"
             moves = None
+        if moves is None and st.crashes and st.last_problem.startswith("crash"):
+            forfeit = current                      # the connection would drop: game lost
+            break
         if moves is not None:
             try:
-                ok, msg = board.validate_moves(moves, current)
+                msg = check_moves(board, current, moves)
             except Exception as e:
-                ok, msg = False, f"malformed moves: {e!r}"
-            if not ok:
+                msg = f"malformed moves: {e!r}"
+            if msg is not None:                    # illegal or empty: the server ends the game
                 st.illegal += 1
                 st.last_problem = msg
-                moves = None
+                forfeit = current
+                break
 
         if moves:
-            board = board.apply_moves(moves, current, deterministic=deterministic_battles)
-        else:                                      # skipped turn still uses up a ply
+            board = perform_moves(board, current, moves, rng)
+        else:                                      # late answer: turn skipped, ply used
             board = board.clone()
             board.turn_count += 1
 
@@ -108,10 +118,12 @@ def play_game(initial: BoardState, agents: Dict[Species, object], first: Species
         current = other(current)
 
     _, winner = board.is_game_over()
+    if forfeit is not None:
+        winner = other(forfeit)
     return GameResult(winner, board.turn_count,
                       board.get_species_total(Species.VAMPIRE),
                       board.get_species_total(Species.WEREWOLF),
-                      sum(c for _, c in board.get_humans()), stats)
+                      sum(c for _, c in board.get_humans()), stats, forfeit)
 
 
 @dataclass

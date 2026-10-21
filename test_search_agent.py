@@ -36,13 +36,14 @@ turn, _ = choose_turn(b, V, depth=2)
 assert (3, 0) in dests(turn)
 print("OK  converts adjacent humans")
 
-# 3) It does not suicide: 3 vampires next to 5 werewolves (5 >= 1.5*3, so attacking is a certain loss).
+# 3) It does not suicide: 3 vampires next to 5 werewolves. On the real server this is a 30% gamble (not
+#    a certain loss), and a failed attack costs all 3 vampires, so the search still declines it.
 b = board_from(1, 10, {(4, 0): (0, 3, 0), (5, 0): (0, 0, 5), (9, 0): (0, 0, 2)})
 turn, info = choose_turn(b, V, depth=2)
 assert (5, 0) not in dests(turn)
 attack_value = min(v for v, t in info.values if (5, 0) in dests(t))
-assert attack_value <= -9999
-print("OK  refuses a certain-loss attack (value of the attack: %.0f)" % attack_value)
+assert attack_value < info.best_value
+print("OK  refuses a 30%% gamble that risks everything (value of the attack %.0f, best %.0f)" % (attack_value, info.best_value))
 
 # 4) Looking one reply ahead matters.  3 vampires next to 3 humans; 10 werewolves wait right behind
 #    them.  Converting needs all 3 vampires and gives 6, which looks better at depth 1 (6 v 10 = -4,
