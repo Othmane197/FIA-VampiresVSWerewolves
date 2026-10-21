@@ -1,12 +1,20 @@
 """
-Real-conditions matches: our tournament bot against each teammate's bot, 3 games each, recorded.
+Real-conditions matches: our tournament bot against each teammate's bot, 4 games each (2 as
+Vampires, 2 as Werewolves), recorded.
 
     python tools/teammate_matches.py                       # the flagship vs Apex, TacticalSplitter, RaceMCTS, Expecti
     python tools/teammate_matches.py --model backup        # the backup model instead
     python tools/teammate_matches.py --opp Apex RaceMCTS   # only some opponents
     python tools/teammate_matches.py --all                 # every bot on the teammates' branches
+    python tools/teammate_matches.py --no-update           # replay the versions already downloaded
 
-First time only: python -m arena.fetch_opponents   (copies the teammates' bots into arena/vendor/)
+ALWAYS THE TEAMMATES' LATEST CODE
+  Before the first game, the script downloads what the teammates have pushed (git fetch of their
+  branches) and copies their current code into arena/vendor/ (arena/fetch_opponents.py): new or
+  renamed helper files are picked up, deleted ones removed. Every result records the exact version
+  played (branch @ commit, date, commit message). Each bot is then loaded once as a check: a bot
+  whose latest version does not even load is reported as unavailable, and the others still play.
+  Without network, the last downloaded version is used and the summary says so.
 
 WHAT "REAL CONDITIONS" MEANS HERE
   * Every game is played over the real network protocol, through tools/fake_server.py (a copy of
@@ -19,15 +27,18 @@ WHAT "REAL CONDITIONS" MEANS HERE
   * One game at a time by default: no other game competes for the CPU.
   * NONE of the arena's speed-ups: every game is played to its real end (no informative-slot
     selection, no early stopping, no shortened thinking time).
-  * The games per opponent cycle through every (map, side) combination of the official sample
-    maps: game 1 testmap.xml as Vampires (we connect first, so we move first), game 2 thetrap.xml as
-    Vampires, game 3 testmap.xml as Werewolves, game 4 thetrap.xml as Werewolves, then again.
+  * Fair sides: the 4 games per opponent cover every (map, side) combination of the official
+    sample maps, so we play 2 games in each role and each map from both sides:
+        game 1  testmap.xml  as Vampires   (we connect first, so we move first)
+        game 2  thetrap.xml  as Vampires
+        game 3  testmap.xml  as Werewolves (they connect first and move first)
+        game 4  thetrap.xml  as Werewolves
 
-HOW LONG: a game takes 1 to 5 minutes, so the default 12 games take about 30-60 minutes.
+HOW LONG: a game takes 1 to 5 minutes, so the default 16 games take about 30-60 minutes.
 
 RESULTS go to arena/results/teammates/<date-time>_<model>/
-    games.csv     one row per game (written as soon as each game ends)
-    summary.md    the summary table printed at the end
+    games.csv     one row per game (written as soon as each game ends), with the opponent's version
+    summary.md    the summary table printed at the end, and the versions played
     logs/         the output of both clients for every game
 plus one line per opponent in arena/results/history.csv (see them with: python -m arena.history).
 """
@@ -45,6 +56,7 @@ from contextlib import ExitStack
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
+from arena.fetch_opponents import fetch
 from arena.maps import build_suite, load_xml
 from arena.run import keep_awake
 from tools.fake_server import FakeServer
@@ -58,12 +70,68 @@ TEAMMATE_BOTS = {
     "MonteCarlo": "Othmane", "Grabber": "Dana", "Rusher": "Dana", "Turtle": "Dana",
 }
 MAIN_BOTS = ["Apex", "TacticalSplitter", "RaceMCTS", "Expecti"]
+VENDOR = os.path.join(ROOT, "arena", "vendor")
 HISTORY = os.path.join(ROOT, "arena", "results", "history.csv")
-FIELDS = ["opponent", "game", "map", "we_connect_first", "our_species", "result", "score", "reason",
-          "plies", "our_total", "their_total", "our_timeouts", "their_timeouts", "our_slowest_move_ms",
-          "watchdog_fallbacks", "cheat", "minutes"]
+FIELDS = ["opponent", "opponent_version", "game", "map", "we_connect_first", "our_species", "result",
+          "score", "reason", "plies", "our_total", "their_total", "our_timeouts", "their_timeouts",
+          "our_slowest_move_ms", "watchdog_fallbacks", "cheat", "minutes"]
 
 
+# ---------------------------------------------------------------------------- teammates' code
+def update_teammates(opponents, no_update: bool) -> dict:
+    """
+    Bring arena/vendor/ up to date with the teammates' latest pushes (unless --no-update) and return
+    {branch: version} for the branches the chosen opponents come from.
+    version = {"commit", "date", "subject", "status"}.
+    """
+    branches = sorted({TEAMMATE_BOTS[o] for o in opponents if o in TEAMMATE_BOTS})
+    if not branches:
+        return {}
+    if no_update:
+        versions = {}
+        for b in branches:
+            path = os.path.join(VENDOR, b, "REVISION")
+            if not os.path.exists(path):
+                sys.exit(f"No downloaded copy of {b}'s bots: run without --no-update (or: python -m arena.fetch_opponents --fetch)")
+            with open(path) as f:
+                parts = f.read().split()           # "<commit> <date> <time> <message...>"
+            parts += ["?"] * (3 - len(parts))       # older REVISION files hold only the commit
+            versions[b] = {"commit": parts[0], "date": f"{parts[1]} {parts[2]}", "subject": " ".join(parts[3:]),
+                           "status": "kept (--no-update)"}
+        return versions
+    print("Downloading the teammates' latest code (git fetch):")
+    versions = fetch(do_git_fetch=True, branches=branches, log=lambda m: print(m, flush=True))
+    for v in versions.values():
+        v["status"] = "latest push" if v["updated"] else "last downloaded version (git fetch failed)"
+    missing = [b for b in branches if b not in versions]
+    if missing:
+        sys.exit(f"Could not get the bots of {', '.join(missing)} (branch not found)")
+    return versions
+
+
+def version_label(opponent: str, versions: dict) -> str:
+    """'Othmane@214dbb0 (2026-10-15 14:27)' for a teammate's bot, 'in-repo' for our own bots."""
+    branch = TEAMMATE_BOTS.get(opponent)
+    v = versions.get(branch) if branch else None
+    return f"{branch}@{v['commit']} ({v['date']})" if v else "in-repo"
+
+
+def check_loads(opponent: str, opp_time: float):
+    """Build the bot once in a fresh process (like tools/play_bot.py does). -> (ok, error message)."""
+    code = (f"import sys; sys.path.insert(0, {ROOT!r}); from arena.opponents import make_bot; "
+            f"make_bot({opponent!r}, {opp_time!r})")
+    try:
+        res = subprocess.run([sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True,
+                             timeout=120, check=False)
+    except subprocess.TimeoutExpired:
+        return False, "loading took more than 2 minutes"
+    if res.returncode == 0:
+        return True, ""
+    lines = [ln for ln in res.stderr.strip().splitlines() if ln.strip()]
+    return False, lines[-1] if lines else f"exit code {res.returncode}"
+
+
+# ---------------------------------------------------------------------------- one game
 def load_map(name: str, max_ply: int):
     """An .xml map file (relative to the repo) or a map name of arena/maps.py."""
     if name.endswith(".xml"):
@@ -129,11 +197,25 @@ def play_game(opponent: str, map_name: str, we_first: bool, a, log_prefix: str, 
             "cheat": f"{cheat[0]}: {cheat[1]}" if cheat else "", "minutes": round((time.time() - t0) / 60, 1)}
 
 
-def summarize(rows, model: str) -> str:
-    """Per-opponent table (markdown) of the finished games."""
-    lines = [f"# Real-conditions matches: Splitter ({model}) vs the teammates' bots", "",
-             "| Opponent | Games | W - D - L | Score | Avg. margin | Our timeouts | Cheats | Slowest move |",
-             "|---|---|---|---|---|---|---|---|"]
+# ---------------------------------------------------------------------------- results
+def summarize(rows, model: str, versions: dict, unavailable: dict) -> str:
+    """Per-opponent table (markdown) of the finished games, the versions played, the unavailable bots."""
+    lines = [f"# Real-conditions matches: Splitter ({model}) vs the teammates' bots", ""]
+    if versions:
+        lines += ["## Versions played", "",
+                  "| Teammate (branch) | Commit | Date | Commit message | Source |", "|---|---|---|---|---|"]
+        for b, v in sorted(versions.items()):
+            lines.append(f"| {b} | {v['commit']} | {v['date']} | {v['subject']} | {v['status']} |")
+        lines.append("")
+    if unavailable:
+        lines += ["## Unavailable opponents (their current version does not load)", ""]
+        lines += [f"- **{o}** ({TEAMMATE_BOTS.get(o, '?')}): {err}" for o, err in unavailable.items()]
+        lines.append("")
+    if not rows:
+        return "\n".join(lines + ["No game was played."])
+    lines += ["## Results", "",
+              "| Opponent | Version | Games | W - D - L | Score | Avg. margin | Our timeouts | Cheats | Slowest move |",
+              "|---|---|---|---|---|---|---|---|---|"]
     groups = {}
     for r in rows:
         groups.setdefault(r["opponent"], []).append(r)
@@ -148,7 +230,8 @@ def summarize(rows, model: str) -> str:
         cheats = sum(1 for r in rs if r["cheat"])
         slow = [r["our_slowest_move_ms"] for r in rs if r["our_slowest_move_ms"] != ""]
         slowest = f"{max(slow):.0f} ms" if slow else "-"
-        lines.append(f"| {name} | {n} | {wins} - {draws} - {losses} | {score:.0f}% | {margin:+.1f} | "
+        version = rs[0]["opponent_version"] if name != "**All**" else ""
+        lines.append(f"| {name} | {version} | {n} | {wins} - {draws} - {losses} | {score:.0f}% | {margin:+.1f} | "
                      f"{timeouts} | {cheats} | {slowest} |")
     lines += ["", (f"{len(rows)} games over the real protocol (2 s per move, 200 plies, 5-minute clock), "
                    "one game at a time, no speed-ups. Margin = our creatures - theirs at the end.")]
@@ -168,19 +251,23 @@ def store_history(rows, a, run_id: str):
             rs = [r for r in rows if r["opponent"] == opp]
             p = sum(r["score"] for r in rs) / len(rs)
             se = math.sqrt(max(p * (1 - p), 1e-9) / len(rs))
-            w.writerow({"run": run_id, "bot": f"Splitter-{a.model} (real conditions)", "opponents": opp,
+            w.writerow({"run": run_id, "bot": f"Splitter-{a.model} (real conditions)",
+                        "opponents": f"{opp} {rs[0]['opponent_version']}",
                         "maps": a.maps, "games": a.games, "time": a.time, "seed": a.seed,
                         "games_played": len(rs), "score": round(100 * p, 1), "se": round(100 * se, 1),
                         "problems": sum(r["our_timeouts"] for r in rs) + sum(1 for r in rs if r["cheat"])})
 
 
+# ---------------------------------------------------------------------------- main
 def main():
-    """Command line: play every (opponent, game), record each game at once, print the summary."""
+    """Command line: update the teammates' bots, play every (opponent, game), record, summarize."""
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--model", choices=("flagship", "backup"), default="flagship", help="which of our two models plays")
     ap.add_argument("--opp", nargs="+", default=None, help=f"opponents (default: {' '.join(MAIN_BOTS)})")
     ap.add_argument("--all", action="store_true", help="every teammate bot: " + " ".join(TEAMMATE_BOTS))
-    ap.add_argument("--games", type=int, default=3, help="games per opponent (default 3)")
+    ap.add_argument("--games", type=int, default=4,
+                    help="games per opponent (default 4 = each map once per side; keep it a multiple of "
+                         "2 x the number of maps so both roles get the same number of games)")
     ap.add_argument("--maps", default="testmap.xml,thetrap.xml",
                     help="maps; the games cycle through every (map, side) combination")
     ap.add_argument("--time", type=float, default=1.5, help="our seconds per move (tournament: 1.5)")
@@ -189,28 +276,39 @@ def main():
     ap.add_argument("--max-ply", type=int, default=200, help="plies per game (real server: 200)")
     ap.add_argument("--game-seconds", type=float, default=300.0, help="game clock (real server: 300)")
     ap.add_argument("--seed", type=int, default=1, help="dice of the random battles")
+    ap.add_argument("--no-update", action="store_true",
+                    help="do not download the teammates' latest code; play the copy already in arena/vendor/")
     ap.add_argument("--out", default=None, help="results folder (default arena/results/teammates/<time>_<model>)")
     ap.add_argument("--no-history", action="store_true", help="do not append to arena/results/history.csv (tests)")
     a = ap.parse_args()
     opponents = list(TEAMMATE_BOTS) if a.all else (a.opp or MAIN_BOTS)
-    missing = sorted({TEAMMATE_BOTS[o] for o in opponents if o in TEAMMATE_BOTS
-                      and not os.path.isdir(os.path.join(ROOT, "arena", "vendor", TEAMMATE_BOTS[o]))})
-    if missing:
-        sys.exit(f"The teammates' bots are missing ({', '.join(missing)}): run  python -m arena.fetch_opponents")
     keep_awake()
+
+    # 1. the teammates' current code, and a load check of every bot
+    versions = update_teammates(opponents, a.no_update)
+    unavailable = {}
+    for opp in opponents:
+        ok, err = check_loads(opp, a.opp_time)
+        if not ok:
+            unavailable[opp] = err
+            print(f"  !! {opp} ({version_label(opp, versions)}) does not load, skipped: {err}")
+    playing = [o for o in opponents if o not in unavailable]
+
+    # 2. the games
     maps = [m.strip() for m in a.maps.split(",") if m.strip()]
     run_id = time.strftime("%Y%m%d-%H%M%S") + f"_{a.model}"
     out = a.out or os.path.join(ROOT, "arena", "results", "teammates", run_id)
     os.makedirs(os.path.join(out, "logs"), exist_ok=True)
-    total = len(opponents) * a.games
-    print(f"Splitter ({a.model}) vs {', '.join(opponents)}: {a.games} games each = {total} games, "
+    total = len(playing) * a.games
+    print(f"\nSplitter ({a.model}) vs {', '.join(playing) or 'nobody'}: {a.games} games each = {total} games, "
           f"one at a time, real server conditions. Results: {out}\n")
     rows = []
     with open(os.path.join(out, "games.csv"), "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
         w.writeheader()
         n = 0
-        for opp in opponents:
+        for opp in playing:
+            label = version_label(opp, versions)
             for g in range(a.games):
                 n += 1
                 map_name, we_first = schedule(g, maps)
@@ -219,16 +317,19 @@ def main():
                       f"we are {'Vampires (move first)' if we_first else 'Werewolves'} ...", end=" ", flush=True)
                 row = play_game(opp, map_name, we_first, a, prefix, a.seed + n)
                 row["game"] = g + 1
+                row["opponent_version"] = label
                 rows.append(row)
                 w.writerow(row)
                 f.flush()
                 extra = f", CHEAT {row['cheat']}" if row["cheat"] else ""
                 print(f"{row['result']:4s} {row['our_total']:3d}-{row['their_total']:<3d} ({row['reason']}, "
                       f"{row['plies']} plies, {row['minutes']} min{extra})", flush=True)
-    summary = summarize(rows, a.model)
+
+    # 3. the results
+    summary = summarize(rows, a.model, versions, unavailable)
     with open(os.path.join(out, "summary.md"), "w", encoding="utf-8") as f:
         f.write(summary + "\n")
-    if not a.no_history:
+    if rows and not a.no_history:
         store_history(rows, a, run_id)
     print("\n" + summary)
     print(f"\nSaved: {os.path.join(out, 'games.csv')}, summary.md, logs/; one line per opponent in {HISTORY}")

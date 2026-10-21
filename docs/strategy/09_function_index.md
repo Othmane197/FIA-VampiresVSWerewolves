@@ -266,7 +266,8 @@ Chapters 01–08 explain *why*; this page answers *where*.
 
 | Name | Kind | Line | Purpose (first docstring line) |
 |---|---|---|---|
-| `fetch` | function | [27](../../arena/fetch_opponents.py#L27) | Copy the teammates' agent files from their origin/<branch> into arena/vendor/<branch>/. |
+| `_git` | function | [33](../../arena/fetch_opponents.py#L33) | Run a git command in the repo (never raises; check returncode). |
+| `fetch` | function | [38](../../arena/fetch_opponents.py#L38) | Copy the teammates' bots from origin/<branch> into arena/vendor/<branch>/. |
 
 ### [arena/history.py](../../arena/history.py)
 
@@ -292,12 +293,15 @@ Chapters 01–08 explain *why*; this page answers *where*.
 
 | Name | Kind | Line | Purpose (first docstring line) |
 |---|---|---|---|
-| `load_map` | function | [67](../../tools/teammate_matches.py#L67) | An .xml map file (relative to the repo) or a map name of arena/maps.py. |
-| `schedule` | function | [74](../../tools/teammate_matches.py#L74) | Game g (0-based): every map as Vampires (we connect first), then every map as Werewolves. |
-| `play_game` | function | [79](../../tools/teammate_matches.py#L79) | One full game over the protocol: fake server + main.py + the teammate's bot. Returns one row. |
-| `summarize` | function | [132](../../tools/teammate_matches.py#L132) | Per-opponent table (markdown) of the finished games. |
-| `store_history` | function | [158](../../tools/teammate_matches.py#L158) | One line per opponent in arena/results/history.csv (same file as the arena and server matches). |
-| `main` | function | [177](../../tools/teammate_matches.py#L177) | Command line: play every (opponent, game), record each game at once, print the summary. |
+| `update_teammates` | function | [81](../../tools/teammate_matches.py#L81) | Bring arena/vendor/ up to date with the teammates' latest pushes (unless --no-update) and return |
+| `version_label` | function | [112](../../tools/teammate_matches.py#L112) | 'Othmane@214dbb0 (2026-10-15 14:27)' for a teammate's bot, 'in-repo' for our own bots. |
+| `check_loads` | function | [119](../../tools/teammate_matches.py#L119) | Build the bot once in a fresh process (like tools/play_bot.py does). -> (ok, error message). |
+| `load_map` | function | [135](../../tools/teammate_matches.py#L135) | An .xml map file (relative to the repo) or a map name of arena/maps.py. |
+| `schedule` | function | [142](../../tools/teammate_matches.py#L142) | Game g (0-based): every map as Vampires (we connect first), then every map as Werewolves. |
+| `play_game` | function | [147](../../tools/teammate_matches.py#L147) | One full game over the protocol: fake server + main.py + the teammate's bot. Returns one row. |
+| `summarize` | function | [201](../../tools/teammate_matches.py#L201) | Per-opponent table (markdown) of the finished games, the versions played, the unavailable bots. |
+| `store_history` | function | [241](../../tools/teammate_matches.py#L241) | One line per opponent in arena/results/history.csv (same file as the arena and server matches). |
+| `main` | function | [262](../../tools/teammate_matches.py#L262) | Command line: update the teammates' bots, play every (opponent, game), record, summarize. |
 
 ### [tools/server_match.py](../../tools/server_match.py)
 

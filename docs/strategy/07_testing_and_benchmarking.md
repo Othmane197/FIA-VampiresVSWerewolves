@@ -40,7 +40,7 @@ Command line: `python tools/fake_server.py --map testmap.xml --port 5555`.
 | [tools/restart_server.ps1](../../tools/restart_server.ps1) | Restart the official exe with a chosen map, `MaxPlays` and `MaxPlayDuration`. It rewrites the `.exe.config`; restore it with `git checkout VampiresVSWerewolvesGameServer.exe.config` |
 | [tools/probe_server.py](../../tools/probe_server.py) | Scripted probe scenarios (`rules`, `late`, `rule5`, `thr15`, `thr6`, `long`) that established chapter 02 |
 | [tools/play_bot.py](../../tools/play_bot.py) | Connect any arena bot (e.g. `Apex`) to a server, to watch Splitter vs a teammate in the GUI |
-| [tools/teammate_matches.py](../../tools/teammate_matches.py) | **Real-conditions matches**: our tournament client vs each teammate's bot, 3 games each, over the protocol, recorded (7.5) |
+| [tools/teammate_matches.py](../../tools/teammate_matches.py) | **Real-conditions matches**: our tournament client vs each teammate's bot, 4 games each (2 per role), over the protocol, recorded (7.5) |
 | [tools/server_match.py](../../tools/server_match.py) | Play **any two client programs** against each other over the protocol (7.5) |
 | [tools/tune_eval.py](../../tools/tune_eval.py) | Fits the evaluation's calibration constants on recorded games (log-loss, with a check set and a calibration table); produced the backup model (chapter 14.3) |
 | [tools/informative_slots.py](../../tools/informative_slots.py) | Picks the (opponent, map) slots that discriminate between configurations, for 2–3× cheaper benchmarks (7.8) |
@@ -50,7 +50,7 @@ Command line: `python tools/fake_server.py --map testmap.xml --port 5555`.
 
 | File | Role |
 |---|---|
-| [fetch_opponents.py](../../arena/fetch_opponents.py) | [`fetch`](../../arena/fetch_opponents.py#L27) copies the teammates' bots from their git branches (`origin/Othmane`, `origin/Ronita`, `origin/Dana`) into `arena/vendor/` (gitignored). Run `python -m arena.fetch_opponents` (add `--fetch` to `git fetch` first) |
+| [fetch_opponents.py](../../arena/fetch_opponents.py) | [`fetch`](../../arena/fetch_opponents.py#L38) copies the teammates' current bots from their git branches (`origin/Othmane`, `origin/Ronita`, `origin/Dana`) into `arena/vendor/` (gitignored): **every top-level `.py` file** except the shared starter-kit files and their tests, so new or renamed helper modules are picked up and deleted ones removed. `vendor/<branch>/REVISION` records the commit copied. Run `python -m arena.fetch_opponents --fetch` (`--fetch` = `git fetch` their latest pushes first) |
 | [opponents.py](../../arena/opponents.py) | [`make_bot(spec, time_limit)`](../../arena/opponents.py#L310) builds any bot behind one interface ([`Bot`](../../arena/opponents.py#L76)). Adapters for the team's two interfaces ([`GameStateBot`](../../arena/opponents.py#L88), [`BoardBot`](../../arena/opponents.py#L110)), plus [`SplitterBot`](../../arena/opponents.py#L127), [`SnapshotBot`](../../arena/opponents.py#L256) and external files ([`load_external`](../../arena/opponents.py#L267)). [`load_vendor`](../../arena/opponents.py#L52) imports a teammate's modules without name clashes. All specs are listed in 7.5 |
 | [referee.py](../../arena/referee.py) | [`play_game`](../../arena/referee.py#L59): one game with the **server's rules** (it uses `State.apply` and `check_moves`). Illegal or crash → the offender loses; too slow → turn skipped. Records the move log, split turns and decision times; `record=True` keeps the full trace (ground truth for chapter 11) |
 | [maps.py](../../arena/maps.py) | [`build_suite`](../../arena/maps.py#L138): 14 **tuning** maps in 6 families: `given` (thetrap, testmap), `sym`, `villages` (many small houses), `prize` (big central house), `close` (close starts), `sparse`; plus the **`holdout`** family (8 maps, fresh seeds) that is only used to validate, never to tune (`--maps all` excludes it). All generated maps are point-symmetric ([`symmetric_map`](../../arena/maps.py#L63)), so neither side has a map advantage. [`write_xml`](../../arena/maps.py#L43) exports a map for the real GUI; `.xml` paths are accepted too |
@@ -98,26 +98,35 @@ The arena is built for fast, paired comparisons. To see how the **tournament bot
 each teammate **under the real server's conditions**, use this script instead:
 
 ```bash
-python tools/teammate_matches.py                       # flagship vs Apex, TacticalSplitter, RaceMCTS, Expecti: 3 games each
+python tools/teammate_matches.py                       # flagship vs Apex, TacticalSplitter, RaceMCTS, Expecti: 4 games each
 python tools/teammate_matches.py --model backup        # the backup model
-python tools/teammate_matches.py --opp Apex --games 5  # one opponent, more games
+python tools/teammate_matches.py --opp Apex --games 8  # one opponent, more games (keep a multiple of 4)
 python tools/teammate_matches.py --all                 # every bot on the teammates' branches
+python tools/teammate_matches.py --no-update           # replay the versions already downloaded
 ```
+
+**Always the teammates' latest code.** Before the first game, the script downloads what the
+teammates have pushed (`git fetch` of their branches) and copies their current code into
+`arena/vendor/`. Then it loads each bot once in a fresh process as a check: a bot whose latest
+version does not load is reported as **unavailable** (with the error) and skipped, and the
+others still play. Every result records the exact version played (branch @ commit, date,
+commit message). Without network, the last downloaded version is used, and the summary says so.
 
 | Condition | Arena (`arena.run`) | `teammate_matches.py` |
 |---|---|---|
 | Rules | Our exact copy of the rules, in-process | **Real binary protocol** through [`FakeServer`](../../tools/fake_server.py#L52): 2 s per move, a late move skips the turn, illegal / empty move or dropped connection = cheating |
 | Game end | 200 plies (no clock) | 200 plies **and the 5-minute game clock** (`MaxGameDuration`, `--game-seconds 300`) |
 | Our bot | `SplitterAgent` called directly | **`main.py`, the tournament client**, with its watchdog, launched as on tournament day |
-| Opponents | Called in-process | Each teammate bot is its own client process (`tools/play_bot.py`) |
+| Opponents | Called in-process; the copy in `arena/vendor/` from the last `fetch_opponents` | Each teammate bot is its own client process (`tools/play_bot.py`), **updated to their latest push at the start of every run** |
 | Who plays first | Alternated | By **connection order**, as on the real server (first to connect = Vampires = moves first) |
 | Speed-ups | Slots, early stopping, parallel workers | **None**: every game is played to its end, one game at a time, 1.5 s per move for every bot |
-| Maps and sides | 14 tuning + 8 hold-out, both sides | The official sample maps `testmap.xml` and `thetrap.xml`; games cycle through every (map, side) combination: testmap as Vampires, thetrap as Vampires, testmap as Werewolves, thetrap as Werewolves (`--maps` to change) |
+| Maps and sides | 14 tuning + 8 hold-out, both sides | The official sample maps `testmap.xml` and `thetrap.xml`; the default 4 games per opponent cover every (map, side) combination, **2 games in each role**: testmap as Vampires, thetrap as Vampires, testmap as Werewolves, thetrap as Werewolves (`--maps` to change) |
 
 **Output** (`arena/results/teammates/<date-time>_<model>/`): `games.csv` (one row per game,
-written as soon as it ends: result, reason, plies, final totals, timeouts of both sides, our
-slowest move read from `main.py`'s log, watchdog fallbacks, cheating), `summary.md` (the summary
-table), `logs/` (both clients' output for every game), and one line per opponent in
+written as soon as it ends: opponent and its version, result, reason, plies, final totals,
+timeouts of both sides, our slowest move read from `main.py`'s log, watchdog fallbacks,
+cheating), `summary.md` (the versions played, any unavailable opponent, and the summary table),
+`logs/` (both clients' output for every game), and one line per opponent, with its version, in
 `arena/results/history.csv`.
 
 ## 7.6 Stored results
@@ -144,7 +153,7 @@ python -m arena.history --comparisons      # paired comparisons
 ## 7.7 How to run an experiment
 
 ```bash
-python -m arena.fetch_opponents                                   # once (or after teammates push)
+python -m arena.fetch_opponents --fetch                           # the teammates' latest pushed bots
 python -m arena.snapshot v7                                       # freeze the current version
 # ... change the code ...
 # screening: several candidates, ONE pool, paired vs the first (the baseline)
