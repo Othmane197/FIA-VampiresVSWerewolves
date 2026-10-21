@@ -163,6 +163,29 @@ class TestFasterBenchmarks(unittest.TestCase):
         tmp.cleanup()
 
 
+class TestTeammateMatches(unittest.TestCase):
+    def test_real_conditions_script_plays_and_records(self):
+        tmp = tempfile.TemporaryDirectory()
+        cmd = [sys.executable, os.path.join(ROOT, "tools", "teammate_matches.py"), "--opp", "Starter",
+               "--games", "2", "--maps", "thetrap.xml", "--max-ply", "10", "--time", "0.2", "--opp-time", "0.2",
+               "--out", tmp.name, "--no-history"]
+        out = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=300, check=False)
+        self.assertEqual(out.returncode, 0, out.stderr[-2000:])
+        with open(os.path.join(tmp.name, "games.csv")) as f:
+            rows = list(csv.DictReader(f))
+        self.assertEqual(len(rows), 2)
+        self.assertEqual([r["our_species"] for r in rows], ["Vampires", "Werewolves"])   # order alternates
+        self.assertTrue(all(r["cheat"] == "" and r["our_timeouts"] == "0" for r in rows))
+        self.assertTrue(os.path.exists(os.path.join(tmp.name, "summary.md")))
+        tmp.cleanup()
+
+    def test_schedule_covers_every_map_and_side(self):
+        from tools.teammate_matches import schedule
+        maps = ["testmap.xml", "thetrap.xml"]
+        self.assertEqual([schedule(g, maps) for g in range(4)],
+                         [("testmap.xml", True), ("thetrap.xml", True), ("testmap.xml", False), ("thetrap.xml", False)])
+
+
 class TestServerMatch(unittest.TestCase):
     def test_two_programs_play_over_the_protocol(self):
         env = dict(os.environ, SPLITTER_TIME="0.2")

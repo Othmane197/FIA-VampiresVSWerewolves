@@ -12,13 +12,14 @@ A clean, lightweight, and complete Python template to connect to the official ga
 ```bash
 python main.py <IP> <PORT> --name MyTeam                 # tournament: the flagship (1.5 s/move, watchdog at 1.8 s)
 SPLITTER_MODEL=backup python main.py <IP> <PORT>         # the backup model (calibrated evaluation)
-python -m unittest discover tests                        # 37 tests incl. end-to-end protocol vs tools/fake_server.py
+python -m unittest discover tests                        # 38 tests incl. end-to-end protocol vs tools/fake_server.py
 python tools/gen_function_index.py --check               # docs/strategy line links still match the code
 python -m arena.fetch_opponents                          # copy teammates' bots from their branches (once)
 python -m arena.run --games 2 --time 0.2                 # flagship vs the panel on 14 maps, both species
 python -m arena.run --bot Splitter Splitter-Calibrated --slots arena/slots/holdout.json --drop-worse --time 0.25
                                                          # paired comparison on the informative games only (2-3x faster)
 python -m arena.run --opp "py:../Other/ai_agent.py"      # any external Python bot file
+python tools/teammate_matches.py                         # REAL server conditions: 3 games vs each teammate's bot, recorded
 python tools/server_match.py --a "python main.py {host} {port}" --b "<any client cmd> {host} {port}"
 python -m arena.history                                  # every stored run and comparison
 python tools/play_bot.py Apex 127.0.0.1 5555             # any arena bot on the real server GUI

@@ -63,11 +63,13 @@ def play_one(cmd_first: str, cmd_second: str, state, timeout: float, seed: int, 
     th = threading.Thread(target=srv.run, daemon=True)
     th.start()
     procs = []
-    for cmd in (cmd_first, cmd_second):
+    for i, cmd in enumerate((cmd_first, cmd_second)):
         full = cmd.format(host="127.0.0.1", port=srv.port)
         procs.append(subprocess.Popen(full, shell=True, cwd=ROOT, stdout=subprocess.DEVNULL,
                                       stderr=subprocess.DEVNULL))
-        time.sleep(0.5)                         # connection order = player order
+        limit = time.time() + 60                # connection order = player order: wait for this client
+        while srv.connected <= i and time.time() < limit and th.is_alive():
+            time.sleep(0.05)
     th.join(timeout=state.max_ply * (timeout + 0.5) + 60)
     for p in procs:
         try:

@@ -5,7 +5,7 @@ bot was improved: **measure → read the lost games → fix → re-measure on th
 
 ## 7.1 Unit and end-to-end tests: [tests/](../../tests)
 
-Run with `python -m unittest discover tests` (standard library only, about 30 s). **37 tests**:
+Run with `python -m unittest discover tests` (standard library only, about 35 s). **38 tests**:
 
 | File | Tests | What they guarantee |
 |---|---|---|
@@ -13,20 +13,22 @@ Run with `python -m unittest discover tests` (standard library only, about 30 s)
 | [test_planner.py](../../tests/test_planner.py) | `test_fuzz_all_plans_legal` (500 random positions × 3 configs, more than 1,000 plans, plus `quick_plan` and `fallback_plan`), `test_safe_step_never_walks_into_bigger_humans`, `test_split_generated_for_two_small_houses`, `test_no_split_when_disabled`, `test_detachment_safety`, `test_unsafe_house_not_split_to` | Every generated plan is legal; splits appear when they should and never toward an unsafe house |
 | [test_agent.py](../../tests/test_agent.py) | **Puzzles:** `test_takes_the_sure_kill`, `test_does_not_suicide_or_wait_next_to_a_killer`, `test_splits_to_take_two_adjacent_houses`, `test_converges_two_groups_on_a_big_house`. **Safety:** `test_time_budget_big_map`, `test_fuzz_never_illegal`, `test_backup_model_never_illegal`, `test_watchdog_sends_the_fallback_when_late`, `test_tournament_client_selects_the_model`, `test_gamestate_interface` | Correct tactical decisions; the budget is respected; a legal move every time, for both models; a late agent is replaced by the fallback move; `SPLITTER_MODEL` really selects the model |
 | [test_protocol.py](../../tests/test_protocol.py) | `test_full_game_no_cheat_no_timeout`, `test_small_map_to_the_end` | Two real `main.py` processes play complete games against the fake server: no cheating, no timeout, clean BYE |
-| [test_arena.py](../../tests/test_arena.py) | `test_python_file_bots_are_loaded_and_play`, `test_arena_task_against_a_file_bot_stores_its_files`, `test_flagship_and_backup`, `test_styled_opponents_are_reproducible`, `test_unknown_option_is_refused`, `test_history_and_comparisons_are_appended`, `test_rounds_keep_the_pairs_together`, `test_paired_delta_and_drop_rule`, `test_informative_slots_skip_games_nobody_disagrees_on`, `test_two_programs_play_over_the_protocol` | The testing infrastructure itself: external bots of both interfaces load and play and their logs get valid file names; the two kept models are built as documented; styled opponents are reproducible; results are stored; the faster-benchmark machinery (rounds, early stopping, slot selection) is correct; two client programs play a server match (7.5) |
+| [test_arena.py](../../tests/test_arena.py) | `test_python_file_bots_are_loaded_and_play`, `test_arena_task_against_a_file_bot_stores_its_files`, `test_flagship_and_backup`, `test_styled_opponents_are_reproducible`, `test_unknown_option_is_refused`, `test_history_and_comparisons_are_appended`, `test_rounds_keep_the_pairs_together`, `test_paired_delta_and_drop_rule`, `test_informative_slots_skip_games_nobody_disagrees_on`, `test_real_conditions_script_plays_and_records`, `test_two_programs_play_over_the_protocol` | The testing infrastructure itself: external bots of both interfaces load and play and their logs get valid file names; the two kept models are built as documented; styled opponents are reproducible; results are stored; the faster-benchmark machinery (rounds, early stopping, slot selection) is correct; the real-conditions script plays, alternates the connection order and records its games; two client programs play a server match (7.5) |
 
 ## 7.2 Fake server: [tools/fake_server.py](../../tools/fake_server.py)
 
-[`FakeServer`](../../tools/fake_server.py#L51) is a headless copy of the official server.
+[`FakeServer`](../../tools/fake_server.py#L52) is a headless copy of the official server.
 
 **What it copies:**
 - the **binary protocol** (NME → SET, HUM, HME, MAP; UPD ↔ MOV; END, BYE);
 - **player 0 moves first;**
 - **UPD contents:** the cells that changed since that player's last UPD;
 - **timeouts:** a late reply skips the turn, and leftover bytes are flushed;
-- **cheating** (`check_moves`) or a dropped connection ends the game.
+- **cheating** (`check_moves`) or a dropped connection ends the game;
+- optionally the **game clock** (`game_seconds`, the real server's `MaxGameDuration` of 5 minutes);
+- it reports how many players have connected, so launchers can enforce the connection order (= who is player 0).
 
-[`FakeServer.run`](../../tools/fake_server.py#L81) plays one full game. It works on any OS, so
+[`FakeServer.run`](../../tools/fake_server.py#L84) plays one full game. It works on any OS, so
 `main.py` can be tested without the Windows GUI.
 
 Command line: `python tools/fake_server.py --map testmap.xml --port 5555`.
@@ -38,6 +40,7 @@ Command line: `python tools/fake_server.py --map testmap.xml --port 5555`.
 | [tools/restart_server.ps1](../../tools/restart_server.ps1) | Restart the official exe with a chosen map, `MaxPlays` and `MaxPlayDuration`. It rewrites the `.exe.config`; restore it with `git checkout VampiresVSWerewolvesGameServer.exe.config` |
 | [tools/probe_server.py](../../tools/probe_server.py) | Scripted probe scenarios (`rules`, `late`, `rule5`, `thr15`, `thr6`, `long`) that established chapter 02 |
 | [tools/play_bot.py](../../tools/play_bot.py) | Connect any arena bot (e.g. `Apex`) to a server, to watch Splitter vs a teammate in the GUI |
+| [tools/teammate_matches.py](../../tools/teammate_matches.py) | **Real-conditions matches**: our tournament client vs each teammate's bot, 3 games each, over the protocol, recorded (7.5) |
 | [tools/server_match.py](../../tools/server_match.py) | Play **any two client programs** against each other over the protocol (7.5) |
 | [tools/tune_eval.py](../../tools/tune_eval.py) | Fits the evaluation's calibration constants on recorded games (log-loss, with a check set and a calibration table); produced the backup model (chapter 14.3) |
 | [tools/informative_slots.py](../../tools/informative_slots.py) | Picks the (opponent, map) slots that discriminate between configurations, for 2–3× cheaper benchmarks (7.8) |
@@ -88,6 +91,34 @@ python tools/server_match.py \
 - Each game starts a `FakeServer` on a free port and launches both commands (`{host}` and `{port}` are filled in).
 - The two clients **alternate who connects first**, so each plays both species and both move orders.
 - Output: one line per game (score, reason, plies, totals, cheating), then the score of A with its standard error, timeouts and cheats.
+
+### Real-conditions matches against the teammates: [tools/teammate_matches.py](../../tools/teammate_matches.py)
+
+The arena is built for fast, paired comparisons. To see how the **tournament bot** does against
+each teammate **under the real server's conditions**, use this script instead:
+
+```bash
+python tools/teammate_matches.py                       # flagship vs Apex, TacticalSplitter, RaceMCTS, Expecti: 3 games each
+python tools/teammate_matches.py --model backup        # the backup model
+python tools/teammate_matches.py --opp Apex --games 5  # one opponent, more games
+python tools/teammate_matches.py --all                 # every bot on the teammates' branches
+```
+
+| Condition | Arena (`arena.run`) | `teammate_matches.py` |
+|---|---|---|
+| Rules | Our exact copy of the rules, in-process | **Real binary protocol** through [`FakeServer`](../../tools/fake_server.py#L52): 2 s per move, a late move skips the turn, illegal / empty move or dropped connection = cheating |
+| Game end | 200 plies (no clock) | 200 plies **and the 5-minute game clock** (`MaxGameDuration`, `--game-seconds 300`) |
+| Our bot | `SplitterAgent` called directly | **`main.py`, the tournament client**, with its watchdog, launched as on tournament day |
+| Opponents | Called in-process | Each teammate bot is its own client process (`tools/play_bot.py`) |
+| Who plays first | Alternated | By **connection order**, as on the real server (first to connect = Vampires = moves first) |
+| Speed-ups | Slots, early stopping, parallel workers | **None**: every game is played to its end, one game at a time, 1.5 s per move for every bot |
+| Maps and sides | 14 tuning + 8 hold-out, both sides | The official sample maps `testmap.xml` and `thetrap.xml`; games cycle through every (map, side) combination: testmap as Vampires, thetrap as Vampires, testmap as Werewolves, thetrap as Werewolves (`--maps` to change) |
+
+**Output** (`arena/results/teammates/<date-time>_<model>/`): `games.csv` (one row per game,
+written as soon as it ends: result, reason, plies, final totals, timeouts of both sides, our
+slowest move read from `main.py`'s log, watchdog fallbacks, cheating), `summary.md` (the summary
+table), `logs/` (both clients' output for every game), and one line per opponent in
+`arena/results/history.csv`.
 
 ## 7.6 Stored results
 

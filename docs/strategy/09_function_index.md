@@ -280,13 +280,23 @@ Chapters 01–08 explain *why*; this page answers *where*.
 
 | Name | Kind | Line | Purpose (first docstring line) |
 |---|---|---|---|
-| `_recv_exact` | function | [33](../../tools/fake_server.py#L33) | Read exactly n bytes from the socket (optionally before a deadline). |
-| `FakeServer` | class | [51](../../tools/fake_server.py#L51) | One-game headless server with the real protocol, rules, time limit and cheating checks. |
-| `FakeServer.__init__` | method | [53](../../tools/fake_server.py#L53) | Listen on 127.0.0.1:port (0 = any free port) for a game on `state`. |
-| `FakeServer._cells` | method | [68](../../tools/fake_server.py#L68) | Encode cells as the protocol's 5-byte tuples (x, y, humans, vampires, werewolves). |
-| `FakeServer._send_upd` | method | [76](../../tools/fake_server.py#L76) | Send a MAP or UPD message with the given cells. |
-| `FakeServer.run` | method | [81](../../tools/fake_server.py#L81) | Accept 2 players, play the whole game, send END and BYE, return the result. |
-| `main` | function | [178](../../tools/fake_server.py#L178) | Command line: run the fake server on a map file. |
+| `_recv_exact` | function | [34](../../tools/fake_server.py#L34) | Read exactly n bytes from the socket (optionally before a deadline). |
+| `FakeServer` | class | [52](../../tools/fake_server.py#L52) | One-game headless server with the real protocol, rules, time limit and cheating checks. |
+| `FakeServer.__init__` | method | [54](../../tools/fake_server.py#L54) | Listen on 127.0.0.1:port (0 = any free port) for a game on `state`; game_seconds = game clock. |
+| `FakeServer._cells` | method | [71](../../tools/fake_server.py#L71) | Encode cells as the protocol's 5-byte tuples (x, y, humans, vampires, werewolves). |
+| `FakeServer._send_upd` | method | [79](../../tools/fake_server.py#L79) | Send a MAP or UPD message with the given cells. |
+| `FakeServer.run` | method | [84](../../tools/fake_server.py#L84) | Accept 2 players, play the whole game, send END and BYE, return the result. |
+| `main` | function | [186](../../tools/fake_server.py#L186) | Command line: run the fake server on a map file. |
+
+### [tools/teammate_matches.py](../../tools/teammate_matches.py)
+
+| Name | Kind | Line | Purpose (first docstring line) |
+|---|---|---|---|
+| `load_map` | function | [66](../../tools/teammate_matches.py#L66) | An .xml map file (relative to the repo) or a map name of arena/maps.py. |
+| `play_game` | function | [73](../../tools/teammate_matches.py#L73) | One full game over the protocol: fake server + main.py + the teammate's bot. Returns one row. |
+| `summarize` | function | [126](../../tools/teammate_matches.py#L126) | Per-opponent table (markdown) of the finished games. |
+| `store_history` | function | [152](../../tools/teammate_matches.py#L152) | One line per opponent in arena/results/history.csv (same file as the arena and server matches). |
+| `main` | function | [171](../../tools/teammate_matches.py#L171) | Command line: play every (opponent, game), record each game at once, print the summary. |
 
 ### [tools/server_match.py](../../tools/server_match.py)
 
@@ -295,7 +305,7 @@ Chapters 01–08 explain *why*; this page answers *where*.
 | `_label` | function | [39](../../tools/server_match.py#L39) | Short name of a client command (its --name, else the script / program name). |
 | `_maps` | function | [48](../../tools/server_match.py#L48) | Map names / families of arena.maps, or .xml paths. |
 | `play_one` | function | [60](../../tools/server_match.py#L60) | One game: server thread + two client processes. Returns the server's result dict. |
-| `main` | function | [82](../../tools/server_match.py#L82) | Command line: play the matches, print a summary, store the results. |
+| `main` | function | [84](../../tools/server_match.py#L84) | Command line: play the matches, print a summary, store the results. |
 
 ### [tools/probe_server.py](../../tools/probe_server.py)
 
@@ -321,13 +331,13 @@ Chapters 01–08 explain *why*; this page answers *where*.
 
 | Name | Kind | Line | Purpose (first docstring line) |
 |---|---|---|---|
-| `_doc` | function | [36](../../tools/gen_function_index.py#L36) | First line of a node's docstring (escaped for a markdown table). |
-| `_entries` | function | [45](../../tools/gen_function_index.py#L45) | (name, kind, line, doc) for every top-level function, class and method of a file. |
-| `render` | function | [62](../../tools/gen_function_index.py#L62) | The whole markdown index. |
-| `check_chapter_links` | function | [91](../../tools/gen_function_index.py#L91) | Every chapter link to a definition (`name` + file + #L line) must point at the line defining `name`. |
-| `_definition_lines` | function | [117](../../tools/gen_function_index.py#L117) | Candidate definition lines of `name` ('Class.method', a function, class, constant or field). |
-| `fix_chapter_links` | function | [133](../../tools/gen_function_index.py#L133) | Move every chapter line link to the current definition line of the function it names. |
-| `main` | function | [170](../../tools/gen_function_index.py#L170) | Write the index, or with --check fail if it (or a chapter's line link) is out of date. |
+| `_doc` | function | [37](../../tools/gen_function_index.py#L37) | First line of a node's docstring (escaped for a markdown table). |
+| `_entries` | function | [46](../../tools/gen_function_index.py#L46) | (name, kind, line, doc) for every top-level function, class and method of a file. |
+| `render` | function | [63](../../tools/gen_function_index.py#L63) | The whole markdown index. |
+| `check_chapter_links` | function | [92](../../tools/gen_function_index.py#L92) | Every chapter link to a definition (`name` + file + #L line) must point at the line defining `name`. |
+| `_definition_lines` | function | [118](../../tools/gen_function_index.py#L118) | Candidate definition lines of `name` ('Class.method', a function, class, constant or field). |
+| `fix_chapter_links` | function | [134](../../tools/gen_function_index.py#L134) | Move every chapter line link to the current definition line of the function it names. |
+| `main` | function | [171](../../tools/gen_function_index.py#L171) | Write the index, or with --check fail if it (or a chapter's line link) is out of date. |
 
 ### [tools/tune_eval.py](../../tools/tune_eval.py)
 
@@ -429,5 +439,7 @@ Chapters 01–08 explain *why*; this page answers *where*.
 | `TestFasterBenchmarks.test_rounds_keep_the_pairs_together` | method | [124](../../tests/test_arena.py#L124) |  |
 | `TestFasterBenchmarks.test_paired_delta_and_drop_rule` | method | [133](../../tests/test_arena.py#L133) |  |
 | `TestFasterBenchmarks.test_informative_slots_skip_games_nobody_disagrees_on` | method | [141](../../tests/test_arena.py#L141) |  |
-| `TestServerMatch` | class | [166](../../tests/test_arena.py#L166) |  |
-| `TestServerMatch.test_two_programs_play_over_the_protocol` | method | [167](../../tests/test_arena.py#L167) |  |
+| `TestTeammateMatches` | class | [166](../../tests/test_arena.py#L166) |  |
+| `TestTeammateMatches.test_real_conditions_script_plays_and_records` | method | [167](../../tests/test_arena.py#L167) |  |
+| `TestServerMatch` | class | [183](../../tests/test_arena.py#L183) |  |
+| `TestServerMatch.test_two_programs_play_over_the_protocol` | method | [184](../../tests/test_arena.py#L184) |  |

@@ -8,9 +8,10 @@ Behaviour copied from the real server (docs/SERVER_FINDINGS.md):
   * each turn: UPD with every cell changed since that player's last UPD, then wait for MOV;
   * late reply (> move_timeout): the turn is skipped; leftover bytes are flushed next turn;
   * illegal moves (the server's CheckMoves) or a dropped connection: game over ("cheating");
-  * end: wipe-out or max_ply plies in total; then END and BYE to both players.
+  * end: wipe-out, max_ply plies in total, or (game_seconds) the game clock (MaxGameDuration,
+    default 5 min on the real server); then END and BYE to both players.
 
-    python tools/fake_server.py --map testmap.xml --port 5555 --max-ply 200 --timeout 2.0
+    python tools/fake_server.py --map testmap.xml --port 5555 --max-ply 200 --timeout 2.0 --game-seconds 300
 """
 import argparse
 import os
@@ -51,10 +52,11 @@ def _recv_exact(sock: socket.socket, n: int, deadline: Optional[float] = None) -
 class FakeServer:
     """One-game headless server with the real protocol, rules, time limit and cheating checks."""
     def __init__(self, state: State, port: int = 0, move_timeout: float = 2.0, seed: Optional[int] = None,
-                 log=print):
-        """Listen on 127.0.0.1:port (0 = any free port) for a game on `state`."""
+                 log=print, game_seconds: Optional[float] = None):
+        """Listen on 127.0.0.1:port (0 = any free port) for a game on `state`; game_seconds = game clock."""
         self.initial = state
         self.move_timeout = move_timeout
+        self.game_seconds = game_seconds
         self.rng = random.Random(seed)
         self.log = log
         self.listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -63,6 +65,7 @@ class FakeServer:
         self.listener.listen(2)
         self.port = self.listener.getsockname()[1]
         self.result: dict = {}
+        self.connected = 0            # players that have connected and sent NME (connection order = player order)
 
     # ------------------------------------------------------------------ protocol
     def _cells(self, state: State, coords) -> bytes:
@@ -93,6 +96,7 @@ class FakeServer:
                 raise ValueError(f"expected NME, got {hdr!r}")
             name = _recv_exact(conn, hdr[3], time.time() + 10).decode("ascii", "replace")
             names.append(name)
+            self.connected = len(names)
             side = V if player == 0 else W
             conn.sendall(b"SET" + bytes([state.rows, state.cols]))
             houses = sorted(state.humans)
@@ -107,7 +111,11 @@ class FakeServer:
         player = 0
         winner = None
         reason = "plies"
+        started = time.time()
         while True:
+            if self.game_seconds is not None and time.time() - started >= self.game_seconds:
+                reason = "clock"                   # MaxGameDuration: the larger total wins
+                break
             if not state.groups[V] or not state.groups[W]:
                 reason = "wipeout"
                 break
@@ -183,8 +191,9 @@ def main():
     ap.add_argument("--port", type=int, default=5555)
     ap.add_argument("--max-ply", type=int, default=200)
     ap.add_argument("--timeout", type=float, default=2.0)
+    ap.add_argument("--game-seconds", type=float, default=None, help="game clock (real server: 300)")
     a = ap.parse_args()
-    srv = FakeServer(load_xml(a.map, a.max_ply), a.port, a.timeout)
+    srv = FakeServer(load_xml(a.map, a.max_ply), a.port, a.timeout, game_seconds=a.game_seconds)
     print(f"[fake-server] listening on 127.0.0.1:{srv.port}")
     srv.run()
 

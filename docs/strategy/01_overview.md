@@ -52,7 +52,7 @@ arena/   benchmarking: maps, opponents (in-repo, external and randomized-style b
          runner (informative slots, early stopping, resume), stored history     (chapter 07)
 tools/   fake server, server matches between any two programs, real-server probes, evaluation
          fitting, informative-slot selection, doc index generator               (chapter 07)
-tests/   37 unit, end-to-end and tooling tests
+tests/   38 unit, end-to-end and tooling tests
 ```
 
 | Package / file | Role |
