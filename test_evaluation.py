@@ -100,6 +100,45 @@ for _ in range(5000):
     assert b.grid == before
 print("OK  zero-sum on 5000 random boards, boards untouched")
 
+# 8b) New terms: threat / kill potential and tempo.
+from evaluation import kill_potential, threat_term, tempo_term
+# 6 vampires next to 4 werewolves: 6 >= 1.5 * 4, so 4 enemies can be killed for sure; they cannot kill us (4 < 9)
+b = board_from(1, 6, {(1, 0): (0, 6, 0), (2, 0): (0, 0, 4)})
+assert kill_potential(b, V) == 4 and kill_potential(b, W) == 0
+assert threat_term(b, V) == 4 and threat_term(b, W) == -4
+# 5 vampires against 4: 5 < 6, not certain
+b = board_from(1, 6, {(1, 0): (0, 5, 0), (2, 0): (0, 0, 4)})
+assert kill_potential(b, V) == 0
+# pooled: two vampire groups of 3 both next to 4 werewolves (3 + 3 = 6 >= 6)
+b = board_from(1, 3, {(0, 0): (0, 3, 0), (2, 0): (0, 3, 0), (1, 0): (0, 0, 4)})
+assert kill_potential(b, V) == 4
+# a group serving one target cannot serve a second one
+b = board_from(1, 5, {(0, 0): (0, 6, 0), (1, 0): (0, 0, 4)})
+b.set_cell((0, 0), 0, 6, 0)
+print("OK  kill_potential: certain kills, pooling, thresholds")
+
+# tempo: equal distance to a human group goes to the side to move
+b = board_from(1, 7, {(0, 0): (0, 3, 0), (6, 0): (0, 0, 3), (3, 0): (2, 0, 0)})
+assert tempo_term(b, V, V) == 2 and tempo_term(b, V, W) == -2 and tempo_term(b, W, V) == -2
+assert evaluate(b, V, tempo_weight=1.0, to_move=V) == -evaluate(b, W, tempo_weight=1.0, to_move=V)
+assert evaluate(b, V, tempo_weight=1.0) == evaluate(b, V)             # unknown mover: no tempo term
+print("OK  tempo term: ties go to the side to move, zero-sum")
+
+rng = random.Random(5)
+for _ in range(300):                                                    # zero-sum with every term on
+    cells = {}
+    for _ in range(rng.randint(3, 8)):
+        pos = (rng.randrange(8), rng.randrange(5))
+        k = rng.randint(1, 12)
+        cells[pos] = rng.choice([(k, 0, 0), (0, k, 0), (0, 0, k)])
+    cells[(0, 0)] = (0, 4, 0)
+    cells[(7, 4)] = (0, 0, 4)
+    b = board_from(5, 8, cells)
+    for mover in (V, W):
+        kw = dict(race_weight=0.5, progress_weight=0.3, threat_weight=0.7, tempo_weight=0.4, to_move=mover)
+        assert close(evaluate(b, V, **kw), -evaluate(b, W, **kw))
+print("OK  evaluate stays zero-sum with every term switched on (300 random boards)")
+
 # 9) Speed on the biggest map with 6 groups per side and several human groups.
 b = BoardState(15, 29)
 for x, y in [(3, 3), (6, 7), (9, 2), (12, 9), (5, 12), (15, 5)]:

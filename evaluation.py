@@ -55,6 +55,30 @@ def _nearest_strong_enough(groups: List[Tuple[Pos, int]], target: Pos, needed: i
     return best
 
 
+def smooth_race_term(board: BoardState, species: Species, scale: float) -> float:
+    """Like race_term, but a lead of d moves is worth H * clamp(d / scale, -1, 1) instead of the
+    all-or-nothing +-H, so that EVERY step toward a human group changes the score (the plain term
+    gives the search no reason to hurry until it is already strictly closer). If only one side can
+    convert the group, that side gets the full +-H."""
+    enemy = Species.WEREWOLF if species == Species.VAMPIRE else Species.VAMPIRE
+    ours = board.get_species_groups(species)
+    theirs = board.get_species_groups(enemy)
+    total = 0.0
+    for pos, humans in board.get_humans():
+        mine = _nearest_strong_enough(ours, pos, humans)
+        other = _nearest_strong_enough(theirs, pos, humans)
+        if mine is None and other is None:
+            continue
+        if other is None:
+            total += humans
+        elif mine is None:
+            total -= humans
+        else:
+            lead = max(-1.0, min(1.0, (other - mine) / scale))
+            total += humans * lead
+    return total
+
+
 def race_term(board: BoardState, species: Species) -> float:
     """Sum over human groups of +H / -H / 0 (see module docstring), before weighting."""
     enemy = Species.WEREWOLF if species == Species.VAMPIRE else Species.VAMPIRE
@@ -93,9 +117,48 @@ def progress_term(board: BoardState, species: Species) -> float:
     return _closeness(board, species) - _closeness(board, enemy)
 
 
+def kill_potential(board: BoardState, species: Species) -> int:
+    """Enemy creatures that `species` could wipe out with certainty NEXT turn: an enemy group of c
+    creatures is counted when the `species` groups standing next to it add up to at least 1.5 * c
+    (the official server pools several groups attacking one cell). Each of our groups is allowed
+    to serve only one target, the biggest it can help to kill."""
+    enemy = Species.WEREWOLF if species == Species.VAMPIRE else Species.VAMPIRE
+    ours = board.get_species_groups(species)
+    total = 0
+    used = set()
+    for epos, c in sorted(board.get_species_groups(enemy), key=lambda g: -g[1]):
+        helpers = [(p, n) for p, n in ours if p not in used and _cheb(p, epos) == 1]
+        if sum(n for _, n in helpers) * 2 >= 3 * c:        # force >= 1.5 * c
+            total += c
+            used.update(p for p, _ in helpers)
+    return total
+
+
+def threat_term(board: BoardState, species: Species) -> float:
+    """What we could kill next turn minus what they could kill (antisymmetric)."""
+    enemy = Species.WEREWOLF if species == Species.VAMPIRE else Species.VAMPIRE
+    return float(kill_potential(board, species) - kill_potential(board, enemy))
+
+
+def tempo_term(board: BoardState, species: Species, to_move: Species) -> float:
+    """Human groups that both sides reach in the same number of moves go to the side that moves
+    first: +H for `to_move`, -H for the other side (the plain race term scores these ties 0)."""
+    enemy = Species.WEREWOLF if species == Species.VAMPIRE else Species.VAMPIRE
+    ours = board.get_species_groups(species)
+    theirs = board.get_species_groups(enemy)
+    total = 0
+    for pos, humans in board.get_humans():
+        mine = _nearest_strong_enough(ours, pos, humans)
+        other = _nearest_strong_enough(theirs, pos, humans)
+        if mine is not None and other is not None and mine == other:
+            total += humans if to_move == species else -humans
+    return float(total)
+
+
 def evaluate(board: BoardState, species: Species, race_weight: float = DEFAULT_RACE_WEIGHT,
-             progress_weight: float = 0.0) -> float:
-    """Score of `board` for `species` (see module docstring)."""
+             progress_weight: float = 0.0, threat_weight: float = 0.0, tempo_weight: float = 0.0,
+             to_move: Optional[Species] = None, race_scale: float = 0.0) -> float:
+    """Score of `board` for `species` (see module docstring). The extra terms are off by default."""
     enemy = Species.WEREWOLF if species == Species.VAMPIRE else Species.VAMPIRE
     ours = board.get_species_total(species)
     theirs = board.get_species_total(enemy)
@@ -110,7 +173,12 @@ def evaluate(board: BoardState, species: Species, race_weight: float = DEFAULT_R
     if board.turn_count >= board.max_turns:
         return WIN_SCORE if ours > theirs else (-WIN_SCORE if ours < theirs else 0.0)
 
-    value = (ours - theirs) + race_weight * race_term(board, species)
+    race = smooth_race_term(board, species, race_scale) if race_scale > 0 else race_term(board, species)
+    value = (ours - theirs) + race_weight * race
     if progress_weight:
         value += progress_weight * progress_term(board, species)
+    if threat_weight:
+        value += threat_weight * threat_term(board, species)
+    if tempo_weight and to_move is not None:
+        value += tempo_weight * tempo_term(board, species, to_move)
     return value
