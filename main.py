@@ -1,3 +1,5 @@
+import json
+import os
 import sys
 import time
 from network import NetworkClient
@@ -122,7 +124,10 @@ def main():
 
     client = NetworkClient(host, port)
     state = GameState()
-    agent = SafeAgent(name=name, time_limit=budget)
+    # Optional search settings as JSON in the environment (for experiments only), e.g.
+    #   VVW_CFG='{"squash": 0.5}' python main.py ...
+    cfg = json.loads(os.environ.get("VVW_CFG", "{}"))
+    agent = SafeAgent(name=name, time_limit=budget, **cfg)
 
     try:
         client.connect()

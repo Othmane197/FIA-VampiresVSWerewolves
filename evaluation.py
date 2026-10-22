@@ -29,6 +29,7 @@ Known limits of version 1 (to check with matches, not assumed):
 
 The function is zero-sum by construction:  evaluate(b, V) == -evaluate(b, W).
 """
+import math
 from typing import List, Optional, Tuple
 
 from game_engine import BoardState
@@ -157,21 +158,22 @@ def tempo_term(board: BoardState, species: Species, to_move: Species) -> float:
 
 def evaluate(board: BoardState, species: Species, race_weight: float = DEFAULT_RACE_WEIGHT,
              progress_weight: float = 0.0, threat_weight: float = 0.0, tempo_weight: float = 0.0,
-             to_move: Optional[Species] = None, race_scale: float = 0.0) -> float:
+             to_move: Optional[Species] = None, race_scale: float = 0.0, squash: float = 0.0) -> float:
     """Score of `board` for `species` (see module docstring). The extra terms are off by default."""
     enemy = Species.WEREWOLF if species == Species.VAMPIRE else Species.VAMPIRE
     ours = board.get_species_total(species)
     theirs = board.get_species_total(enemy)
 
     # Game over: same conditions as BoardState.is_game_over
+    top = 1.0 if squash > 0 else WIN_SCORE                 # with squash the whole scale is [-1, 1]
     if ours == 0 and theirs == 0:
         return 0.0
     if theirs == 0:
-        return WIN_SCORE
+        return top
     if ours == 0:
-        return -WIN_SCORE
+        return -top
     if board.turn_count >= board.max_turns:
-        return WIN_SCORE if ours > theirs else (-WIN_SCORE if ours < theirs else 0.0)
+        return top if ours > theirs else (-top if ours < theirs else 0.0)
 
     race = smooth_race_term(board, species, race_scale) if race_scale > 0 else race_term(board, species)
     value = (ours - theirs) + race_weight * race
@@ -181,4 +183,10 @@ def evaluate(board: BoardState, species: Species, race_weight: float = DEFAULT_R
         value += threat_weight * threat_term(board, species)
     if tempo_weight and to_move is not None:
         value += tempo_weight * tempo_term(board, species, to_move)
+    if squash > 0:
+        # Express the score as a winning chance in [-1, 1]: a lead of `squash` * (all creatures) gives
+        # about 0.76. A coin flip that decides the game is then worth 0, so a position that is a bit
+        # ahead is preferred to it (with +-10000 terminals, any 50/50 gamble looked like "0" next to a
+        # small material lead of a few creatures, which the search could not tell apart).
+        value = math.tanh(value / (squash * (ours + theirs)))
     return value
