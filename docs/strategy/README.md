@@ -52,6 +52,7 @@ The documentation is updated in the **same change** as the code:
 
 | Date | Change | Chapters updated |
 |---|---|---|
+| 2026-10-22 | Clean-up: expired results deleted (every run of Oct 18–19, campaign 1's CSVs and lost-game logs, the Oct 19 recorded games, the superseded teammate run, smoke-test runs); kept: the 1.5 s validations, campaign 2's runs (screen, stages B–D, clock), the recorded games behind the backup's fit, the latest teammate run, and the cumulative `history.csv` / `comparisons.csv`. Static scan: no unreferenced code in our modules. `__pycache__` folders removed. 39 tests pass. | 07, 08, 14 |
 | 2026-10-21 | `tools/teammate_matches.py` always plays the teammates' latest code: `git fetch` + copy at the start of every run (`--no-update` to skip), a load check per bot (unavailable bots reported and skipped), the version played recorded in every output. `arena/fetch_opponents.py` copies every top-level `.py` of a branch (except shared starter files and tests) instead of a fixed list, and removes deleted files. | 07 |
 | 2026-10-21 | `tools/teammate_matches.py` default changed to 4 games per opponent (2 as Vampires, 2 as Werewolves, each map from both sides). | 07 |
 | 2026-10-21 | `tools/teammate_matches.py`: real-conditions matches vs the teammates' bots (real protocol, 2 s, 200 plies, 5-minute clock, `main.py` as client, one game at a time, no speed-ups), 3 games per opponent, recorded. Fake server: game clock and connection-order tracking (also used by `tools/server_match.py`). 38 tests. | 07, 08 |

@@ -94,7 +94,7 @@ chapter 07.5; 2026-10-21): the flagship through `main.py`, the real protocol (2 
 - **Safety:** 0 illegal or empty moves, 0 dropped connections, 0 watchdog fallbacks. Slowest move 1.50 s, except **one 9.3 s move** in Apex game 1 (won anyway). It was a normal agent answer, not a watchdog fallback, and Apex also timed out once in that game, so the whole process (watchdog included) appears to have been frozen, most likely by a stall of the machine.
 - **By side:** as Vampires (moving first) 7 wins and 1 draw in 8 games; as Werewolves 2 wins and 1 loss in 3 games (the loss: RaceMCTS on testmap).
 - **Sample size:** 11 games give about ±10% per opponent group; this is a check of real-conditions behaviour, not a precise strength estimate (chapter 14 has those).
-- An earlier run of the same day (`20261021-155722_flagship`, 79%) is superseded: its schedule tied each map to one side (fixed since).
+- An earlier run of the same day (79%, since deleted) was superseded: its schedule tied each map to one side (fixed since).
 
 ## 8.3 Iteration history: every change came from a lost game
 

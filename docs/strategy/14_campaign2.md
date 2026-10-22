@@ -129,7 +129,9 @@ iterations). The flagship is already at a local optimum for these ideas at this 
 
 ### Evaluation fitting
 
-`python tools/tune_eval.py --train <224 old + 224 new tuning-map games> --check <128 hold-out games>`:
+`python tools/tune_eval.py --train <224 old + 224 new tuning-map games> --check <128 hold-out games>`
+(the 224 older games, from 2026-10-19, were deleted in the results clean-up; the 224 newer ones
+are `arena/results/traces/20261020-171040_Splitter`, the hold-out ones `traces/20261020-170854_Splitter`):
 14,725 training positions, 4,524 check positions.
 
 | | Train log-loss | Check log-loss (hold-out maps) |

@@ -12,7 +12,7 @@ A clean, lightweight, and complete Python template to connect to the official ga
 ```bash
 python main.py <IP> <PORT> --name MyTeam                 # tournament: the flagship (1.5 s/move, watchdog at 1.8 s)
 SPLITTER_MODEL=backup python main.py <IP> <PORT>         # the backup model (calibrated evaluation)
-python -m unittest discover tests                        # 38 tests incl. end-to-end protocol vs tools/fake_server.py
+python -m unittest discover tests                        # 39 tests incl. end-to-end protocol vs tools/fake_server.py
 python tools/gen_function_index.py --check               # docs/strategy line links still match the code
 python -m arena.fetch_opponents --fetch                  # copy the teammates' latest bots from their branches
 python -m arena.run --games 2 --time 0.2                 # flagship vs the panel on 14 maps, both species
