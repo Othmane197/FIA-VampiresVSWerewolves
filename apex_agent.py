@@ -20,6 +20,7 @@ Architecture:
 import time
 import math
 import random
+import gc
 from typing import List, Tuple, Optional, Dict, Set
 from game_state import Species
 from game_engine import BoardState, DIRECTIONS, chebyshev_dist, manhattan_dist, combat_win_probability
@@ -196,17 +197,21 @@ class ApexAlphaBetaAgent:
                     best_pull = 0.0
                     for h_pos, h_cnt in safe_humans:
                         d = chebyshev_dist(my_pos, h_pos)
-                        min_ene_d = min(chebyshev_dist(e_pos, h_pos) for e_pos, _ in enemy_groups) if enemy_groups else 99
 
-                        # --- FEATURE 2: VORONOI TEMPORAL FILTER ---
+                        # Ghost Defender Correction (General & Anti-Overfitting):
+                        # An enemy is only a genuine competitor if it has enough units to convert safely (e_cnt >= h_cnt)
+                        competitors = [e_pos for e_pos, e_cnt in enemy_groups if e_cnt >= h_cnt]
+                        min_ene_d = min(chebyshev_dist(e_pos, h_pos) for e_pos in competitors) if competitors else 99
+
+                        # Seamless Voronoi Proximity Factor (No binary cliff, eliminates oscillation):
                         if self.enable_voronoi:
-                            if min_ene_d < d:
-                                # Target strictly inside enemy Voronoi cell: ignore completely
-                                continue
-                            elif d < min_ene_d:
-                                ratio = 1.4  # Safe territory bonus
-                            else:
+                            if d < min_ene_d:
+                                ratio = 1.4  # Strictly inside our secure Voronoi cell
+                            elif d == min_ene_d:
                                 ratio = 1.0  # Equal distance border contest
+                            else:
+                                # Enemy is closer; if we have Lanchester dominance (>= 1.5x), we can contest and crush them
+                                ratio = 1.0 if our_total >= 1.5 * ene_total else 0.4
                         else:
                             ratio = 1.3 if d <= min_ene_d else 0.7
 
@@ -390,7 +395,19 @@ class ApexAlphaBetaAgent:
         enemy_species = Species.WEREWOLF if current_species == Species.VAMPIRE else Species.VAMPIRE
         enemy_groups = state.get_species_groups(enemy_species)
 
-        # Tactical contact check: are we adjacent (d == 1) to any enemy group?
+        # Stand-Pat cutoff: unconditional (Chess standard, guarantees fast beta-cutoffs)
+        if maximizing_player:
+            if stand_pat >= beta:
+                return beta
+            if stand_pat > alpha:
+                alpha = stand_pat
+        else:
+            if stand_pat <= alpha:
+                return alpha
+            if stand_pat < beta:
+                beta = stand_pat
+
+        # Tactical contact check: only proceed if adjacent (d == 1) to an enemy group
         has_contact = any(
             chebyshev_dist(mp, ep) == 1
             for mp, _ in our_groups
@@ -399,14 +416,29 @@ class ApexAlphaBetaAgent:
         if not has_contact:
             return stand_pat
 
-        if maximizing_player:
-            if stand_pat >= beta:
-                return beta
-            if stand_pat > alpha:
-                alpha = stand_pat
+        candidate_moves = self.generate_moves(state, current_species)
+        if not candidate_moves:
+            return stand_pat
 
-            candidate_moves = self.generate_moves(state, current_species)
-            for move in candidate_moves:
+        # Filter strictly for deterministic tactical captures (1.5x enemy kills or direct human conversions)
+        # Quiet moves are already captured by Stand-Pat and must NOT be searched in QS
+        capture_moves = []
+        for move in candidate_moves:
+            is_capture = False
+            for x1, y1, cnt, x2, y2 in move:
+                th, tv, tw = state.get_cell((x2, y2))
+                ene_cnt = tw if current_species == Species.VAMPIRE else tv
+                if (ene_cnt > 0 and cnt >= 1.5 * ene_cnt) or (th > 0 and cnt >= th):
+                    is_capture = True
+                    break
+            if is_capture:
+                capture_moves.append(move)
+
+        if not capture_moves:
+            return stand_pat
+
+        if maximizing_player:
+            for move in capture_moves:
                 child = state.apply_moves(move, current_species, deterministic=True)
                 score = self.quiescence_search(child, alpha, beta, False, root_species, qdepth - 1)
                 if self.time_limit_exceeded:
@@ -417,13 +449,7 @@ class ApexAlphaBetaAgent:
                     alpha = score
             return alpha
         else:
-            if stand_pat <= alpha:
-                return alpha
-            if stand_pat < beta:
-                beta = stand_pat
-
-            candidate_moves = self.generate_moves(state, current_species)
-            for move in candidate_moves:
+            for move in capture_moves:
                 child = state.apply_moves(move, current_species, deterministic=True)
                 score = self.quiescence_search(child, alpha, beta, True, root_species, qdepth - 1)
                 if self.time_limit_exceeded:
@@ -455,54 +481,63 @@ class ApexAlphaBetaAgent:
         best_move_overall = candidate_moves[0]
         best_score_overall = -float('inf')
 
-        # Iterative Deepening: Depth 1 to 6
-        max_search_depth = 6
-        for depth in range(1, max_search_depth + 1):
-            if time.time() - self.start_time > self.max_time:
-                break
+        # Disable GC during search to avoid latency jitter in strict time budget
+        gc_was_enabled = gc.isenabled()
+        if gc_was_enabled:
+            gc.disable()
 
-            current_best_move = None
-            current_best_score = -float('inf')
-            alpha = -float('inf')
-            beta = float('inf')
-
-            def root_move_priority(m):
-                if m == tt_best_move:
-                    return 1000000.0
-                pri = 0.0
-                for x1, y1, cnt, x2, y2 in m:
-                    th, tv, tw = state.get_cell((x2, y2))
-                    ene_cnt = tw if species == Species.VAMPIRE else tv
-                    if ene_cnt > 0 and cnt >= 1.5 * ene_cnt:
-                        pri += 50000.0
-                    elif th > 0 and cnt >= th:
-                        pri += 20000.0 + th * 100.0
-                    elif ene_cnt > 0 and ene_cnt >= 1.5 * cnt:
-                        pri -= 100000.0
-                return pri
-
-            candidate_moves.sort(key=root_move_priority, reverse=True)
-
-            for move in candidate_moves:
-                child_state = state.apply_moves(move, species, deterministic=True)
-                score = self.alpha_beta(child_state, depth - 1, alpha, beta, False, species)
-
-                if self.time_limit_exceeded:
+        try:
+            # Iterative Deepening: Depth 1 to 6
+            max_search_depth = 6
+            for depth in range(1, max_search_depth + 1):
+                if time.time() - self.start_time > self.max_time:
                     break
 
-                if score > current_best_score:
-                    current_best_score = score
-                    current_best_move = move
+                current_best_move = None
+                current_best_score = -float('inf')
+                alpha = -float('inf')
+                beta = float('inf')
 
-                alpha = max(alpha, score)
-                if alpha >= beta:
-                    break
+                def root_move_priority(m):
+                    if m == tt_best_move:
+                        return 1000000.0
+                    pri = 0.0
+                    for x1, y1, cnt, x2, y2 in m:
+                        th, tv, tw = state.get_cell((x2, y2))
+                        ene_cnt = tw if species == Species.VAMPIRE else tv
+                        if ene_cnt > 0 and cnt >= 1.5 * ene_cnt:
+                            pri += 50000.0
+                        elif th > 0 and cnt >= th:
+                            pri += 20000.0 + th * 100.0
+                        elif ene_cnt > 0 and ene_cnt >= 1.5 * cnt:
+                            pri -= 100000.0
+                    return pri
 
-            if not self.time_limit_exceeded and current_best_move is not None:
-                best_move_overall = current_best_move
-                best_score_overall = current_best_score
-                tt_best_move = current_best_move
-                if current_best_score >= 900000.0:
-                    break
+                candidate_moves.sort(key=root_move_priority, reverse=True)
+
+                for move in candidate_moves:
+                    child_state = state.apply_moves(move, species, deterministic=True)
+                    score = self.alpha_beta(child_state, depth - 1, alpha, beta, False, species)
+
+                    if self.time_limit_exceeded:
+                        break
+
+                    if score > current_best_score:
+                        current_best_score = score
+                        current_best_move = move
+
+                    alpha = max(alpha, score)
+                    if alpha >= beta:
+                        break
+
+                if not self.time_limit_exceeded and current_best_move is not None:
+                    best_move_overall = current_best_move
+                    best_score_overall = current_best_score
+                    tt_best_move = current_best_move
+                    if current_best_score >= 900000.0:
+                        break
+        finally:
+            if gc_was_enabled:
+                gc.enable()
 
         return best_move_overall

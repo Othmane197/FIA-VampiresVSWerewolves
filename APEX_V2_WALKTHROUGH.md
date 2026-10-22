@@ -88,30 +88,31 @@ Dans les implémentations naïves de Voronoï sur grille, un village $H$ est aba
 ### 3.2. Modélisation Mathématique
 Pour chaque groupe ennemi $e = (\text{pos}_e, E_e)$ et chaque colonie humaine $H = (\text{pos}_H, N_H)$, nous définissons le **Coefficient de Crédibilité de Menace** $C(e, H) \in [0, 1]$ :
 
-$$C(e, H) = \begin{cases} 
-1.0 & \text{si } E_e \ge N_H \quad \text{(Capacité de capture déterministe)} \\
-\max\left(0.05, \dfrac{E_e}{2 \times N_H}\right) & \text{si } E_e < N_H \quad \text{(Menace probabiliste faible)}
+### 3.2. Résolution du « Défenseur Fantôme » (Capacité de Capture Déterministe)
+Un ennemi ne représente un obstacle territorial réel que s'il dispose d'effectifs suffisants pour convertir la colonie humaine de manière déterministe sans risque de suicide :
+$$\text{Compétiteurs Réels}(H) = \{ e \in \text{Ennemis} \mid E_e \ge N_H \}$$
+$$\min d_{\text{ennemi}}(H) = \begin{cases}
+\min_{e \in \text{Compétiteurs}} d_\infty(e, H) & \text{si } \text{Compétiteurs} \neq \emptyset \\
+99 & \text{sinon (aucun concurrent viable)}
 \end{cases}$$
-
-La **Distance Effective Adverse** $d_{\text{eff}}(e, H)$ s'écrit alors :
-$$d_{\text{eff}}(e, H) = \frac{d_\infty(e, H)}{C(e, H)}$$
 
 ```text
 EXEMPLE DU DÉFENSEUR FANTÔME RÉSOLU :
 Village : 8 humains. Ennemi : 2 loups à d = 2. Notre armée : 15 vampires à d = 3.
 
-• Calcul naïve v1 :  d_ene = 2 < d_nous = 3  ───> Cible abandonnée ❌ (Gaffe !)
-• Voronoï Capacitaire :
-  C(e, H) = 2 / (2 × 8) = 0.125
-  d_eff = 2 / 0.125 = 16 cases !
-  d_nous = 3 << 16  ───> Cible dans notre Voronoï exclusif garanti ✅ (Ratio 1.4)
+• Approche naïve v1 :  d_ene = 2 < d_nous = 3 ───> Village ignoré ❌ (Grave erreur !)
+• Voronoï Robuste :
+  L'ennemi (2 loups) ne peut pas capturer 8 humains (2 < 8). Il est éliminé des compétiteurs.
+  min d_ennemi = 99  >>>  d_nous = 3 ───> Village en Voronoï allié sécurisé garanti ✅ (Ratio 1.4)
 ```
 
-### 3.3. Les Trois Régimes Territoriaux
+### 3.3. Facteur Territorial Continu (Zéro Falaise Binaire)
+Pour éliminer les oscillations d'hésitation et garantir une transition fluide :
 $$\text{Ratio}(H) = \begin{cases} 
-0.0 & \text{si } \min_e d_{\text{eff}}(e, H) < d_\infty(\text{nous}, H) \quad \text{(Cellule ennemie crédible : abandon)} \\
-1.4 & \text{si } d_\infty(\text{nous}, H) < \min_e d_{\text{eff}}(e, H) \quad \text{(Cellule alliée garantie : priorité haute)} \\
-1.0 & \text{si égalité} \quad \text{(Frontière contestée)}
+1.4 & \text{si } d_\infty(\text{nous}, H) < \min d_{\text{ennemi}}(H) \quad \text{(Cellule alliée sécurisée)} \\
+1.0 & \text{si } d_\infty(\text{nous}, H) = \min d_{\text{ennemi}}(H) \quad \text{(Frontière de contestation directe)} \\
+1.0 & \text{si } d_\infty(\text{nous}, H) > \min d_{\text{ennemi}}(H) \text{ et } E_{\text{nous}} \ge 1.5 \times E_{\text{ennemi}} \quad \text{(Contestation et écrasement)} \\
+0.4 & \text{si l'ennemi est plus proche sans domination allié} \quad \text{(Amortissement sans veto brutal)}
 \end{cases}$$
 
 ---
@@ -139,29 +140,24 @@ $$\text{Pull}_{\text{OFR}}(H) = \frac{W_{\text{pull}} \cdot N_{\text{hum}} \cdot
 À profondeur $depth = 0$, un Minimax standard évalue statiquement la position. Si deux armées se trouvent au contact immédiat ($d=1$), l'évaluation statique voit notre armée intacte et renvoie un score favorable, ignorant le massacre au tour suivant.
 
 ### 5.2. Principe du Stand-Pat & Détection d'Instabilité
-À la feuille, l'algorithme teste s'il y a un contact direct avec l'ennemi :
+À la feuille ($depth = 0$), l'algorithme teste s'il y a un contact direct avec l'ennemi :
 $$\text{Contact Tactique} \iff \exists (\text{allié}, \text{ennemi}) \text{ tel que } d_\infty(\text{allié}, \text{ennemi}) = 1$$
 * Si aucun contact : la position est **quiescente** (stable), on renvoie immédiatement `Evaluate(state)`.
 * Si contact présent : la recherche s'étend récursivement sur un pli tactique additionnel ($qdepth = 1$).
 
-```python
-def quiescence_search(self, state, alpha, beta, maximizing_player, root_species, qdepth=1):
-    stand_pat = self.evaluate(state, root_species)
-    if qdepth <= 0 or not has_contact:
-        return stand_pat
-```
+### 5.3. Règle Fondamentale : Le Stand-Pat Inconditionnel
+Contrairement à une fausse intuition qui consisterait à désactiver le Stand-Pat sous menace (ce qui ferait exploser l'arbre récursif de fuites à distance de Chebyshev et effondrerait la profondeur de recherche globale), **le Stand-Pat est maintenu inconditionnellement à 100%** :
+* Si $\text{Stand-Pat} \ge \beta \implies$ coupure $\beta$ immédiate en $\mathcal{O}(1)$ sans générer de coups.
+* Si $\text{Stand-Pat} > \alpha \implies \alpha = \text{Stand-Pat}$.
+* La menace de perte d'armée est déjà pénalisée mathématiquement par la fonction d'évaluation statique `Evaluate(state)`, et la planification de fuite stratégique appartient à l'arbre Minimax principal ($depth \ge 1$).
 
-### 5.3. Correction Critique : Le Piège du "Stand-Pat sous Menace" (*In-Check Trap*)
-Dans les implémentations classiques d'échecs, un joueur ne peut pas faire "Stand-Pat" lorsqu'il est en échec.  
-Dans *Vampires VS Werewolves*, si notre armée est adjacente à une force ennemie ayant une supériorité $\ge 1.5\times$, nous sommes **en prise mortelle**.
-* **Notre correction :** Si l'armée est sous menace létale directe ($E_{\text{ennemi}} \ge 1.5 \times E_{\text{nous}}$ à $d=1$), **le Stand-Pat est désactivé** : le joueur MAX n'a pas le droit de considérer la position statique comme acceptable et est forcé de chercher un coup d'évasion ou de riposte.
-
-### 5.4. Ordonnancement Heuristique dans la Quiescence
-Pour déclencher des coupures $\beta$ quasi-instantanées sans explorer les 8 directions neutres, les coups en Quiescence sont strictement priorisés :
-1. **Frappes létales $1.5\times$** : $+50\,000\text{ pts}$ (destruction garantie de l'ennemi).
-2. **Conversions immédiates d'humains à $d=1$** : $+15\,000\text{ pts} + H \times 100$.
-3. **Évasions hors de portée létale** : $+10\,000\text{ pts}$.
-4. **Pénalisation absolue des suicides** : $-100\,000\text{ pts}$.
+### 5.4. Élagage Radical : Captures Déterministes Uniquement
+Pour garantir une exécution ultra-rapide en pur Python sans perte de profondeur globale :
+1. **Zéro coup calme (*quiet move*) en QS** : Les déplacements neutres sont déjà évalués par le Stand-Pat.
+2. **Filtrage exclusif sur les captures déterministes** :
+   - Frappes d'anéantissement déterministe à $\ge 1.5\times$ sur une armée adverse.
+   - Conversions immédiates sans perte d'humains ($cnt \ge H$).
+3. **Facteur de branchement maîtrisé** : Le nombre de coups explorés tombe de 30+ à seulement 0, 1 ou 2 coups, permettant de résoudre instantanément l'effet d'horizon tout en préservant le débit de calcul (21 000+ nœuds/sec).
 
 ---
 
