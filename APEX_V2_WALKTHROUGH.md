@@ -319,8 +319,8 @@ Score_Total = Delta_Materiel + Bonus_Domination + Score_OFR + Danger_Tactique + 
 | **2. Bonus_Domination** | Seuil de domination 1.5× | `+60 000 + (Effectif_nous - 1.5 × Effectif_ennemi) × 1000` si Effectif_nous ≥ 1.5 × Effectif_ennemi<br>`-60 000 - (Effectif_ennemi - 1.5 × Effectif_nous) × 1000` si Effectif_ennemi ≥ 1.5 × Effectif_nous |
 | **3. Score_OFR** | Attraction humaine | Score d'attraction du meilleur village atteignable pondéré par Voronoï |
 | **4. Danger_Tactique** | Matrice tactique de contact | `±120 000` si contact à distance d = 1 selon le rapport de force<br>`±25 000` si embuscade possible à distance d = 2 |
-| **5. Traque_Ennemi** | Chasse du roi adverse | Si nous dominons (Effectif_nous ≥ 1.5 × Effectif_ennemi) : `- Distance(nous, ennemi) × 400`<br>*(Pousse notre armée à foncer sur l'ennemi pour l'achever)* |
-| **6. Cohesion_Armee** | Pénalité de scission | Malus massif si nos troupes sont éparpillées en plusieurs sous-groupes |
+| **5. Traque_Ennemi** | Chasse active & Pression | Dès que nous dominons (≥ 1.5×) ou que les humains proches sont absorbés : `- Distance(nous, ennemi) × 400`<br>*(Pousse notre armée à traquer activement l'adversaire et éviter les impasses)* |
+| **6. Cohesion_Armee** | Sécurité de scission | Malus **uniquement si une escouade scindée est en danger** ($d \le 3$ d'un ennemi supérieur). Aucune pénalité si les escouades récoltent en zone sécurisée. |
 
 ---
 
@@ -341,6 +341,15 @@ Dans un face-à-face rigoureux sur 8 matchs Aller-Retour :
 * **Victoires Apex v1 :** **2**
 * **Matchs Nuls :** **2**
 * **Taux de supériorité net :** **66.7%** de victoires hors nuls.
+
+### 8.2. Évolution des Générations : V0 (Monobloc) ➔ V1 (Split) ➔ V2 (Longue Portée & Pression)
+Pour une vue détaillée de toute la méthodologie, voir le document de synthèse : [DEMARCHE_ET_HISTORIQUE_DU_PROJET.md](DEMARCHE_ET_HISTORIQUE_DU_PROJET.md).
+
+| Version | Clé d'Architecture | Score vs V0 (10x10) | Effectif Max (25x25) | Face à Mohamed (25x25) |
+| :--- | :--- | :---: | :---: | :---: |
+| **Apex V0** | Monobloc rigide, peur du split, stagnation | Baseline | 20 unités | 17 vs 64 (Défaite écrasante) |
+| **Apex V1** | Scission économique permise, autonomie multi-groupes | **22-0 et 25-0** | 17 unités | 12 vs 45 (Défaite) |
+| **Apex V2** | **Gradient longue portée non-décroissant + Combats $\ge 70\%$** | **22-0** | **51 unités** | **46 vs 40 (VICTOIRE !)** |
 
 ---
 

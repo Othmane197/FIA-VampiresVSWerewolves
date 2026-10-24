@@ -45,9 +45,11 @@ def run_10_matches():
     print("=" * 85, flush=True)
 
     # 1. Agents Setup
+    time_budget = 0.6
+
     apex = ApexAlphaBetaAgent(
         name="ApexChampion",
-        max_time_seconds=1.2,
+        max_time_seconds=time_budget,
         enable_foraging_yield=False,
         enable_voronoi=True,
         enable_quiescence=True
@@ -55,19 +57,22 @@ def run_10_matches():
 
     mohamed = MohamedAgentAdapter(
         name="Mohamed_Splitter",
-        time_limit=1.2
+        time_limit=time_budget
     )
 
-    # 2. 5 Distinct Maps
+    # 2. 5 Distinct Maps covering small, medium, large, and giant scales
     maps = []
-    if os.path.exists("testmap.xml"):
-        maps.append(("Officielle_15x29", load_map_from_xml("testmap.xml")))
-    if os.path.exists("testmap2.xml"):
-        maps.append(("TestMap2_Centrale_15x29", load_map_from_xml("testmap2.xml")))
     if os.path.exists("thetrap.xml"):
         maps.append(("TheTrap_5x10", load_map_from_xml("thetrap.xml")))
+    else:
+        maps.append(("Compacte_6x9", generate_random_symmetric_map(6, 9, start_units=6, num_pairs=2, seed=42)))
     maps.append(("Carree_10x10", generate_random_symmetric_map(10, 10, start_units=8, num_pairs=3, seed=42)))
     maps.append(("Rectangle_10x18", generate_random_symmetric_map(10, 18, start_units=10, num_pairs=4, seed=123)))
+    if os.path.exists("testmap.xml"):
+        maps.append(("Officielle_15x29", load_map_from_xml("testmap.xml")))
+    else:
+        maps.append(("Grande_15x29", generate_random_symmetric_map(15, 29, start_units=10, num_pairs=5, seed=303)))
+    maps.append(("Geante_25x25", generate_random_symmetric_map(25, 25, start_units=12, num_pairs=7, seed=404)))
 
     results = []
     apex_wins = 0
