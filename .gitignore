@@ -35,6 +35,13 @@ face_mohamed_agent.py
 test_v*.py
 run_splitter_*.py
 tournament_v*.py
+tournament_arena.py
+play_match.py
+play_duel.py
+apex_ablation_arena.py
+rival_agents.py
+rival_bot.py
+ai_agent_*.py
 
 # Historical versions & third-party teammate code
 apex_agent_v*.py
