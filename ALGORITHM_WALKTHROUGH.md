@@ -220,27 +220,39 @@ L'algorithme trie les branches selon des priorités tactiques :
 
 ---
 
-### Composant 5 : Fonction d'Évaluation Heuristique (`evaluate`)
+### Composant 5 : Fonction d'Évaluation Heuristique (`evaluate`) et Projection de Course
 *Fichier* : [`apex_agent.py`](apex_agent.py)
 
-À la profondeur maximale de l'arbre, on évalue la qualité de la position selon cinq critères pondérés :
+À la profondeur maximale de l'arbre, on évalue la qualité de la position selon les piliers tactiques et prédictifs :
 
-1. **Différentiel de Troupes (Matériel)** :
-   $$\text{Score}_{\text{mat}} = (N_{\text{alliés}} - N_{\text{ennemis}}) \times 2000$$
+1. **Projection de Course à 25 Tours (`_project_race`)** :
+   En $0.025 \text{ ms}$, l'algorithme simule en ligne droite l'ordre d'arrivée de tous les coureurs (alliés et ennemis) sur les villages humains. Cette projection en horizon lointain évalue les gains matériels futurs actualisés ($\text{discount}^t$) et récompense immédiatement la récolte en parallèle dès la racine.
 
-2. **Seuil de Domination ($1.5\times$)** :
-   Dès que notre effectif total dépasse $1.5 \times N_{\text{ennemis}}$, la partie est mathématiquement gagnante. On injecte un bonus majeur de $+60\,000$ points.
+2. **Différentiel de Troupes (Matériel Actuel & Projeté)** :
+   $$\text{Score}_{\text{mat}} = (N_{\text{alliés}} - N_{\text{ennemis}}) \times 2000 + (\Delta_{\text{projeté, alliés}} - \Delta_{\text{projeté, ennemis}}) \times 1500$$
 
-3. **Gradient d'Attraction vers les Humains** :
-   Pour chaque colonie humaine convertible sans pertes, on calcule un potentiel attractif inversement proportionnel à la distance de Chebyshev $d$ :
-   $$\text{Attraction} = \frac{3000 \times N_{\text{humains}}}{d + 1}$$
-   Ce gradient continu guide l'armée vers les cibles prioritaires sans hésitation ni mouvement oscillant.
+3. **Seuil de Domination ($1.5\times$) Réel et Prédictif** :
+   Dès que notre effectif total (actuel ou projeté à 25 tours) dépasse $1.5 \times N_{\text{ennemis}}$, un bonus majeur de domination ($+60\,000$ points) est accordé.
 
-4. **Matrice Anti-Embuscade** :
-   Si une case d'arrivée place notre armée à distance $1$ d'un groupe ennemi capable de nous éliminer au tour suivant ($E_{\text{ennemi}} \ge 1.5 \times E_{\text{nous}}$), une pénalité critique de $-150\,000$ points est appliquée.
+4. **Gradient Spatial Normalisé et Anti-Oscillation** :
+   Calcul d'un potentiel attractif vers les villages non contestés, normalisé par les dimensions de la carte ($\max(\text{rows}, \text{cols})$), éliminant l'aplatissement du gradient sur les grands plateaux.
 
-5. **Traque Finale (Endgame)** :
-   Lorsque tous les humains sont convertis ou que notre supériorité est acquise, l'heuristique minimise la distance à l'ennemi pour forcer le contact et clore la partie.
+5. **Matrice Anti-Embuscade & Évitement Lanchester** :
+   Pénalité fatale ($-100\,000$ points) si un groupe s'expose à portée $1.5\times$ de l'adversaire. En cas de menace à distance $\le 3$, le groupe maximise sa distance à la menace tout en évitant d'être acculé contre les bordures.
+
+6. **Partitionnement Disjoint des Cibles & Convergence en Pince** :
+   Chaque groupe allié possède une cible exclusive (`claimed_targets`) pour éviter la refusion prématurée. Si un grand village (ex. 12 ou 20 humains) dépasse la capacité d'un groupe seul, les groupes exécutent une convergence synchronisée en pince.
+
+7. **Traque Finale (Endgame)** :
+   Lorsque tous les humains sont convertis ou que la supériorité est acquise, l'heuristique minimise la distance à l'ennemi pour forcer le combat et clore la partie.
+
+---
+
+### Composant 6 : Élagage de Déplacement en Transit (*Transit Move Pruning*)
+
+Pour approfondir la recherche Minimax sans explosion combinatoire :
+* Lorsque les groupes sont en plein transit ($d_{\text{ennemi}} \ge 4$ et $d_{\text{humain}} > 1$), tous les coups qui augmentent la distance à la cible sont élagués.
+* Le facteur de branchement s'effondre de $b = 8$ à **$b \approx 2$**, permettant d'atteindre une **profondeur de 10 à 14 plys** dans le budget temps de 1.65 seconde.
 
 ---
 

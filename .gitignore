@@ -27,3 +27,22 @@ desktop.ini
 
 # Backup files
 *.bak
+
+# Internal benchmarks & experimental tournament scripts
+*.json
+benchmark_*.py
+face_mohamed_agent.py
+test_v*.py
+run_splitter_*.py
+tournament_v*.py
+
+# Historical versions & third-party teammate code
+apex_agent_v*.py
+apex_agent_split_experiment.py
+splitter/
+
+# Internal project reporting & research docs (preserved locally on disk)
+DEMARCHE_ET_HISTORIQUE_DU_PROJET.md
+APEX_V2_WALKTHROUGH.md
+ABLATION_STUDY.md
+argon_issues_response.md
