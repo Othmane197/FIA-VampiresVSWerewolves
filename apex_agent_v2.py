@@ -1,0 +1,732 @@
+"""
+Apex Alpha-Beta Minimax Agent (CentraleSupélec FIA Project)
+Author: Pair programming with Google Antigravity
+
+Architecture:
+- Iterative Deepening Alpha-Beta Search (IDS) with strict time budgeting (<1.7s per ply)
+- Custom Transposition Table with fast 64-bit state hashing
+- Strategic Move Ordering (Transposition best move -> 1.5x enemy kills -> safe human conversions -> Voronoi territory steps)
+- Deep Tactical Evaluation Function:
+  * Material Differential with 1.5x Domination Threshold
+  * Smooth Potential Field Gradient to Highest-Value Human Settlements
+  * 1-Step Lethal Danger Zone & Ambush Avoidance
+  * Anti-Suicide & Risk-Averse Stochastic Combat Pruning
+  * Concentrated Deathball Principle (No premature splintering)
+  * Endgame Predator Pursuit (Relentless Hunt when Domination Achieved)
+- Strict compliance with Tournament Rules 1 to 6
+- 100% self-contained: No prohibited AI/graph/tree external libraries
+"""
+
+import time
+import math
+import random
+import gc
+from typing import List, Tuple, Optional, Dict, Set
+from game_state import Species
+from game_engine import BoardState, DIRECTIONS, chebyshev_dist, manhattan_dist, combat_win_probability
+
+# Evaluation Constants
+W_MATERIAL = 2000.0
+W_DOMINATION_BONUS = 60000.0   # Triggered when our total >= 1.5 * enemy total
+W_HUMAN_PULL = 3000.0          # Potential gradient pulling towards safe humans
+W_DANGER_LETHAL = -150000.0    # Stepping into enemy 1.5x strike radius
+W_THREAT_KILL = 120000.0       # Direct 1.5x kill on enemy group
+W_RANDOM_BATTLE_RISK = -25000.0# Gambling army on coin-flip battle
+W_PURSUIT = 400.0              # Relentless hunting when dominant
+
+class TranspositionEntry:
+    __slots__ = ('depth', 'score', 'flag', 'best_move')
+    def __init__(self, depth: int, score: float, flag: int, best_move: Optional[List[Tuple[int, int, int, int, int]]]):
+        self.depth = depth
+        self.score = score
+        self.flag = flag
+        self.best_move = best_move
+
+class ApexAlphaBetaAgent:
+    def __init__(self, name: str = "ApexAlphaBeta", max_time_seconds: float = 1.65,
+                 enable_foraging_yield: bool = False,
+                 enable_voronoi: bool = False,
+                 enable_quiescence: bool = False):
+        self.name = name
+        self.max_time = max_time_seconds
+        self.enable_foraging_yield = enable_foraging_yield
+        self.enable_voronoi = enable_voronoi
+        self.enable_quiescence = enable_quiescence
+        self.transposition_table: Dict[int, TranspositionEntry] = {}
+        self.nodes_searched = 0
+        self.start_time = 0.0
+        self.time_limit_exceeded = False
+
+        # 64-bit Zobrist keys
+        random.seed(42)
+        self.zobrist_hum = {}
+        self.zobrist_vmp = {}
+        self.zobrist_wrw = {}
+
+    def _get_zobrist_keys(self, pos: Tuple[int, int]) -> Tuple[int, int, int]:
+        if pos not in self.zobrist_hum:
+            self.zobrist_hum[pos] = random.getrandbits(64)
+            self.zobrist_vmp[pos] = random.getrandbits(64)
+            self.zobrist_wrw[pos] = random.getrandbits(64)
+        return self.zobrist_hum[pos], self.zobrist_vmp[pos], self.zobrist_wrw[pos]
+
+    @staticmethod
+    def _straight_path(src: Tuple[int, int], dst: Tuple[int, int]) -> List[Tuple[int, int]]:
+        """A legal king path, diagonal first, used only for conservative split safety."""
+        x, y = src
+        path = []
+        while (x, y) != dst:
+            x += (dst[0] > x) - (dst[0] < x)
+            y += (dst[1] > y) - (dst[1] < y)
+            path.append((x, y))
+        return path
+
+    def _split_is_safe(self, src, count, detachment, target, humans, enemies) -> bool:
+        """Conservative race and exposure check for a detached human-foraging group."""
+        h = humans.get(target, 0)
+        path = self._straight_path(src, target)
+        distance = len(path)
+        if detachment < h or not path:
+            return False
+        for enemy_pos, enemy_count in enemies:
+            enemy_distance = chebyshev_dist(enemy_pos, target)
+            # Enemy group capable of taking this village wins a strictly shorter race.
+            if enemy_count >= h and enemy_distance < distance:
+                return False
+            # A group at least as large as the detachment can contest its route.
+            if enemy_count >= detachment:
+                for step, cell in enumerate(path[:-1], start=1):
+                    if chebyshev_dist(enemy_pos, cell) <= step:
+                        return False
+                converted = detachment + h
+                if enemy_distance <= distance and enemy_count >= converted:
+                    return False
+                if enemy_distance <= distance + 1 and enemy_count >= 1.5 * converted:
+                    return False
+        return True
+
+    def _append_split_plans(self, state, species, groups, enemies, human_groups, candidates):
+        """Add a small set of safe parallel-foraging plans, inspired by Splitter's planner."""
+        if len(groups) != 1:
+            return
+        (src, count), = groups
+        if count < 3 or not human_groups:
+            return
+        enemy_counts = enemies
+        # Calibrated reserve: protect against enemies within close range (<= 3),
+        # while keeping at least 35% of the army as core body.
+        reserve = max(2, int(0.35 * count))
+        for enemy_pos, enemy_count in enemy_counts:
+            d_ene = chebyshev_dist(src, enemy_pos)
+            if d_ene <= 3:
+                reserve = max(reserve, enemy_count + 1)
+            elif d_ene <= 5:
+                reserve = max(reserve, int(0.7 * enemy_count))
+        options = []
+        for target, humans in human_groups:
+            distance = chebyshev_dist(src, target)
+            if humans <= 0 or humans > 255:
+                continue
+            if distance <= 1:  # Existing normal move generation handles immediate captures.
+                continue
+            first_steps = [cell for cell in state.get_neighbors(src)
+                           if chebyshev_dist(cell, target) == distance - 1]
+            safe_steps = [cell for cell in first_steps
+                          if state.get_cell(cell)[0] <= humans
+                          and not any(chebyshev_dist(enemy_pos, cell) == 1
+                                      and enemy_count >= humans
+                                      for enemy_pos, enemy_count in enemy_counts)]
+            if not safe_steps:
+                continue
+            for detachment in (humans, humans + 1, humans + 2):
+                if (detachment <= 0 or detachment > count - reserve
+                        or detachment + humans > 255):
+                    continue
+                if self._split_is_safe(src, count, detachment, target,
+                                       dict(human_groups), enemy_counts):
+                    # Reward useful, small detachments; rank is board-size independent.
+                    value = humans / ((distance + 1.0) * detachment)
+                    options.append((value, target, detachment))
+                    break
+        options.sort(key=lambda item: item[0], reverse=True)
+        options = options[:5]
+        # Keep singles and only a few best pairs to bound the alpha-beta branching factor.
+        combos = [[option] for option in options]
+        pairs = []
+        for i in range(len(options)):
+            for j in range(i + 1, len(options)):
+                if options[i][1] != options[j][1]:
+                    pairs.append((options[i][0] + options[j][0], options[i], options[j]))
+        pairs.sort(key=lambda item: item[0], reverse=True)
+        combos.extend([[first, second] for _, first, second in pairs[:4]])
+
+        for combo in combos:
+            detached = sum(option[2] for option in combo)
+            remainder = count - detached
+            if remainder < reserve or remainder <= 0:
+                continue
+            moves = []
+            destinations = set()
+            valid = True
+            for _, target, units in combo:
+                # The first move of a shortest path must be adjacent and distinct from sources.
+                steps = [cell for cell in state.get_neighbors(src)
+                         if chebyshev_dist(cell, target) == chebyshev_dist(src, target) - 1
+                         and state.get_cell(cell)[0] <= units
+                         and not any(chebyshev_dist(enemy_pos, cell) == 1 and enemy_count >= units
+                                     for enemy_pos, enemy_count in enemy_counts)]
+                if not steps:
+                    valid = False
+                    break
+                step = min(steps, key=lambda cell: (cell in destinations,
+                                                    chebyshev_dist(cell, target), cell))
+                if step in destinations:
+                    valid = False
+                    break
+                destinations.add(step)
+                moves.append((src[0], src[1], units, step[0], step[1]))
+            if not valid or not moves:
+                continue
+            # The unsent reserve remains at the source; the server only accepts explicit
+            # detachment orders, and moving the reserve would reunite it with one detachment.
+            ok, _ = state.validate_moves(moves, species)
+            if ok and moves not in candidates:
+                candidates.append(moves)
+
+    def compute_hash(self, state: BoardState, active_species: Species) -> int:
+        h = 0x84222325CBBF484F
+        if active_species == Species.VAMPIRE:
+            h ^= 0x1B873593
+        for pos, (hum, vmp, wrw) in state.grid.items():
+            k_h, k_v, k_w = self._get_zobrist_keys(pos)
+            if hum > 0:
+                h ^= (k_h * hum) & 0xFFFFFFFFFFFFFFFF
+            if vmp > 0:
+                h ^= (k_v * vmp) & 0xFFFFFFFFFFFFFFFF
+            if wrw > 0:
+                h ^= (k_w * wrw) & 0xFFFFFFFFFFFFFFFF
+        return h
+
+    # ---------------------------------------------------------
+    # Move Generation (Deathball Concentration Principle)
+    # ---------------------------------------------------------
+    def generate_moves(self, state: BoardState, species: Species) -> List[List[Tuple[int, int, int, int, int]]]:
+        """
+        Generates tactical moves adhering strictly to Rules 1 to 6.
+        Keeps armies unified to maximize Lanchester combat power,
+        merging groups when separated.
+        """
+        groups = state.get_species_groups(species)
+        if not groups:
+            return []
+
+        enemy_species = Species.WEREWOLF if species == Species.VAMPIRE else Species.VAMPIRE
+        enemy_groups = state.get_species_groups(enemy_species)
+        human_groups = state.get_humans()
+        sources = set(pos for pos, _ in groups)
+
+        candidate_list: List[List[Tuple[int, int, int, int, int]]] = []
+
+        # CASE 1: Single group: ordinary whole-group moves plus safe split-foraging plans.
+        if len(groups) == 1:
+            (src_x, src_y), count = groups[0]
+            src = (src_x, src_y)
+            neighbors = state.get_neighbors(src)
+            valid_destinations = [n for n in neighbors if n not in sources] or neighbors
+
+            for dst in valid_destinations:
+                candidate_list.append([(src_x, src_y, count, dst[0], dst[1])])
+            self._append_split_plans(state, species, groups, enemy_groups, human_groups, candidate_list)
+            return candidate_list
+
+        # CASE 2: Multiple Groups (Autonomous Foraging & Conditional Regrouping)
+        group_options: List[List[Tuple[Tuple[int, int], int, Tuple[int, int]]]] = []
+        all_safe_humans = [(h_pos, h_cnt) for h_pos, h_cnt in human_groups if h_cnt > 0]
+
+        for (src_x, src_y), count in groups:
+            src = (src_x, src_y)
+            neighbors = state.get_neighbors(src)
+            valid_dsts = [n for n in neighbors if n not in sources] or neighbors
+
+            # Check if this group is under threat from an enemy that can strike or crush it
+            threatened_by = [e_pos for e_pos, e_cnt in enemy_groups
+                             if chebyshev_dist(src, e_pos) <= 3 and e_cnt >= count]
+
+            # Best accessible human for this group
+            accessible_humans = [(h_pos, h_cnt) for h_pos, h_cnt in all_safe_humans if count >= h_cnt]
+            best_human = None
+            if accessible_humans:
+                best_human = min(accessible_humans,
+                                 key=lambda item: (chebyshev_dist(src, item[0]), -item[1]))[0]
+
+            # Closest friendly group (for regrouping when threatened or done harvesting)
+            other_friends = [pos for pos, _ in groups if pos != src]
+            closest_friend = min(other_friends, key=lambda p: chebyshev_dist(src, p)) if other_friends else None
+
+            def step_score(dst):
+                val = 0.0
+                th, tv, tw = state.get_cell(dst)
+                ene_cnt = tw if species == Species.VAMPIRE else tv
+
+                # Immediate tactical combat
+                if ene_cnt > 0 and count >= 1.5 * ene_cnt:
+                    val += 2500.0  # Annihilation
+                elif th > 0 and count >= th:
+                    val += 1500.0  # Immediate human conversion
+
+                # Danger avoidance on destination square
+                for e_pos, e_cnt in enemy_groups:
+                    d_e = chebyshev_dist(dst, e_pos)
+                    if d_e == 1 and e_cnt >= 1.5 * count:
+                        val -= 8000.0
+                    elif d_e == 1 and e_cnt > count:
+                        val -= 3000.0
+
+                # Movement priorities:
+                # 1. If threatened by superior enemy: regroup with friend!
+                if threatened_by and closest_friend:
+                    val -= chebyshev_dist(dst, closest_friend) * 120.0
+                # 2. If safe and has a human target: autonomous foraging!
+                elif best_human:
+                    val -= chebyshev_dist(dst, best_human) * 60.0
+                # 3. If no humans left: clean convergence
+                elif closest_friend:
+                    val -= chebyshev_dist(dst, closest_friend) * 30.0
+
+                return val
+
+            sorted_dsts = sorted(valid_dsts, key=step_score, reverse=True)[:4]
+            group_options.append([((src_x, src_y), count, d) for d in sorted_dsts])
+
+        if len(group_options) == 2:
+            for opt1 in group_options[0]:
+                for opt2 in group_options[1]:
+                    candidate_list.append([
+                        (opt1[0][0], opt1[0][1], opt1[1], opt1[2][0], opt1[2][1]),
+                        (opt2[0][0], opt2[0][1], opt2[1], opt2[2][0], opt2[2][1])
+                    ])
+        else:
+            combined = []
+            for opts in group_options:
+                best = opts[0]
+                combined.append((best[0][0], best[0][1], best[1], best[2][0], best[2][1]))
+            candidate_list.append(combined)
+
+        return candidate_list
+
+    # ---------------------------------------------------------
+    # Evaluation Function
+    # ---------------------------------------------------------
+    def evaluate(self, state: BoardState, our_species: Species) -> float:
+        enemy_species = Species.WEREWOLF if our_species == Species.VAMPIRE else Species.VAMPIRE
+
+        our_total = state.get_species_total(our_species)
+        ene_total = state.get_species_total(enemy_species)
+
+        # Terminal conditions
+        if ene_total == 0 and our_total > 0:
+            return 1000000.0 + our_total * 1000.0
+        if our_total == 0:
+            return -1000000.0 - ene_total * 1000.0
+
+        score = 0.0
+
+        # 1. Material Advantage & 1.5x Domination Threshold
+        mat_diff = our_total - ene_total
+        score += mat_diff * W_MATERIAL
+
+        if our_total >= 1.5 * ene_total:
+            score += W_DOMINATION_BONUS + (our_total - 1.5 * ene_total) * 1000.0
+        elif ene_total >= 1.5 * our_total:
+            score -= W_DOMINATION_BONUS + (ene_total - 1.5 * our_total) * 1000.0
+
+        our_groups = state.get_species_groups(our_species)
+        enemy_groups = state.get_species_groups(enemy_species)
+        human_groups = state.get_humans()
+
+        # 2. Human Feeding Potential Gradient
+        # Strategic territorial pull towards all reachable human settlements
+        if human_groups:
+            for (my_pos, my_cnt) in our_groups:
+                safe_humans = [(h_pos, h_cnt) for (h_pos, h_cnt) in human_groups if my_cnt >= h_cnt]
+                if safe_humans:
+                    pulls = []
+                    for h_pos, h_cnt in safe_humans:
+                        d = chebyshev_dist(my_pos, h_pos)
+
+                        # Ghost Defender Correction (General & Anti-Overfitting):
+                        # An enemy is only a genuine competitor if it has enough units to convert safely (e_cnt >= h_cnt)
+                        competitors = [e_pos for e_pos, e_cnt in enemy_groups if e_cnt >= h_cnt]
+                        min_ene_d = min(chebyshev_dist(e_pos, h_pos) for e_pos in competitors) if competitors else max(state.rows, state.cols)
+
+                        # Seamless Voronoi Proximity Factor (No binary cliff, eliminates oscillation):
+                        if self.enable_voronoi:
+                            # Smooth, bounded distance advantage avoids cliffs and scales to 50x50.
+                            margin = max(-1.0, min(1.0, (min_ene_d - d) / 4.0))
+                            ratio = 1.0 + 0.4 * margin
+                        else:
+                            ratio = 1.3 if d <= min_ene_d else 0.7
+
+                        # Non-decaying long-range distance factor (prevents gradient flattening on 15x29 and 25x25)
+                        max_dim = max(state.rows, state.cols, 10)
+                        dist_factor = max(0.25, 1.0 - 0.65 * (d / max_dim))
+
+                        if self.enable_foraging_yield:
+                            pull = (W_HUMAN_PULL * h_cnt * ratio) / ((d + 0.5) ** 1.3)
+                            if d == 1:
+                                pull += 8000.0
+                        else:
+                            pull = W_HUMAN_PULL * (h_cnt ** 1.1) * ratio * dist_factor
+                            if d == 1:
+                                pull += 6000.0  # Immediate conversion bonus
+
+                        pulls.append((pull, h_pos))
+                    pulls.sort(reverse=True)
+                    for rank, (pull, _) in enumerate(pulls[:3]):
+                        score += pull / (rank + 1)
+
+        # 3. Threat Matrix & Calculated Combat Valuation
+        for (my_pos, my_cnt) in our_groups:
+            for (e_pos, e_cnt) in enemy_groups:
+                dist = chebyshev_dist(my_pos, e_pos)
+
+                if dist == 1:
+                    # In direct strike range
+                    if my_cnt >= 1.5 * e_cnt:
+                        score += W_THREAT_KILL + (e_cnt * 3000.0)
+                    elif e_cnt >= 1.5 * my_cnt:
+                        score += W_DANGER_LETHAL - (my_cnt * 3000.0)
+                    else:
+                        # Calculated battle probability:
+                        win_p = combat_win_probability(my_cnt, e_cnt)
+                        if win_p >= 0.70:
+                            # Favorable battle (>= 70% win chance): reward pressing advantage!
+                            score += (win_p * e_cnt - (1.0 - win_p) * my_cnt) * 1500.0 + 5000.0
+                        elif win_p >= 0.45:
+                            # Unfavorable 50/50 gamble
+                            score -= 30000.0
+                        else:
+                            # Underdog position: flee
+                            score -= 50000.0
+
+                elif dist == 2:
+                    # 1 step away from danger/ambush
+                    if e_cnt >= 1.5 * my_cnt:
+                        score -= 25000.0
+                    elif my_cnt >= 1.5 * e_cnt:
+                        score += 15000.0
+                    elif my_cnt > e_cnt:
+                        score += 5000.0
+
+        # 4. Cohesion & Vulnerability Control
+        # Do NOT penalize safe parallel foraging! Only penalize if a split group is exposed to lethal danger.
+        if len(our_groups) > 1:
+            for (my_pos, my_cnt) in our_groups:
+                for (e_pos, e_cnt) in enemy_groups:
+                    d_ene = chebyshev_dist(my_pos, e_pos)
+                    if d_ene <= 2 and e_cnt >= 1.5 * my_cnt:
+                        # Split group in lethal 1.5x strike zone!
+                        score -= 20000.0
+                    elif d_ene <= 3 and e_cnt >= my_cnt:
+                        score -= 5000.0
+
+            # If all humans are gone, encourage natural reunification for the endgame hunt
+            if not human_groups and len(our_groups) > 1:
+                pair_distances = [chebyshev_dist(our_groups[i][0], our_groups[j][0])
+                                  for i in range(len(our_groups))
+                                  for j in range(i + 1, len(our_groups))]
+                score -= (sum(pair_distances) / len(pair_distances)) * 50.0
+
+        # 5. Endgame Pursuit & Active Territorial Pressure (Anti-Stalemate)
+        # Relentlessly hunt down enemies if:
+        # a) We dominate (>= 1.5x)
+        # b) No humans left
+        # c) Stagnant map: remaining humans are far (> 6) and we have parity or lead
+        min_human_d = min((chebyshev_dist(g_pos, h_pos) for g_pos, _ in our_groups for h_pos, _ in human_groups), default=99)
+        hunt_mode = (our_total >= 1.5 * ene_total or not human_groups or (min_human_d >= 6 and our_total >= ene_total))
+
+        if hunt_mode and enemy_groups:
+            closest_enemy_dist = min(
+                chebyshev_dist(g_pos, e_pos)
+                for g_pos, _ in our_groups
+                for e_pos, _ in enemy_groups
+            )
+            score -= closest_enemy_dist * W_PURSUIT
+
+        return score
+
+    # ---------------------------------------------------------
+    # Alpha-Beta Search Core
+    # ---------------------------------------------------------
+    def alpha_beta(self, state: BoardState, depth: int, alpha: float, beta: float,
+                   maximizing_player: bool, root_species: Species) -> float:
+        self.nodes_searched += 1
+
+        if time.time() - self.start_time > self.max_time:
+            self.time_limit_exceeded = True
+            return 0.0
+
+        over, winner = state.is_game_over()
+        if over:
+            if winner == root_species:
+                return 1000000.0 + depth * 1000.0
+            elif winner is not None:
+                return -1000000.0 - depth * 1000.0
+            return 0.0
+
+        if depth == 0:
+            if not self.enable_quiescence:
+                return self.evaluate(state, root_species)
+            return self.quiescence_search(state, alpha, beta, maximizing_player, root_species, qdepth=1)
+
+        current_species = root_species if maximizing_player else (
+            Species.WEREWOLF if root_species == Species.VAMPIRE else Species.VAMPIRE
+        )
+
+        state_hash = self.compute_hash(state, current_species)
+        tt_entry = self.transposition_table.get(state_hash)
+        tt_best_move = None
+        if tt_entry is not None and tt_entry.depth >= depth:
+            if tt_entry.flag == 0:
+                return tt_entry.score
+            elif tt_entry.flag == 1:
+                alpha = max(alpha, tt_entry.score)
+            elif tt_entry.flag == 2:
+                beta = min(beta, tt_entry.score)
+            if alpha >= beta:
+                return tt_entry.score
+            tt_best_move = tt_entry.best_move
+
+        candidate_moves = self.generate_moves(state, current_species)
+        if not candidate_moves:
+            return self.evaluate(state, root_species)
+
+        # Move ordering
+        def move_priority(m):
+            if m == tt_best_move:
+                return 1000000.0
+            pri = 0.0
+            for x1, y1, cnt, x2, y2 in m:
+                th, tv, tw = state.get_cell((x2, y2))
+                ene_cnt = tw if current_species == Species.VAMPIRE else tv
+                if ene_cnt > 0 and cnt >= 1.5 * ene_cnt:
+                    pri += 10000.0   # 1.5x enemy kill
+                elif th > 0 and cnt >= th:
+                    pri += 5000.0 + th * 100.0  # Safe human conversion
+                elif ene_cnt > 0 and ene_cnt >= 1.5 * cnt:
+                    pri -= 50000.0  # Suicidal blunder
+                elif ene_cnt > 0:
+                    pri -= 20000.0  # Non-1.5x gamble avoidance!
+            return pri
+
+        candidate_moves.sort(key=move_priority, reverse=True)
+
+        best_score = -float('inf') if maximizing_player else float('inf')
+        best_move_found = None
+        orig_alpha = alpha
+
+        if maximizing_player:
+            for move in candidate_moves:
+                child_state = state.apply_moves(move, current_species, deterministic=True)
+                score = self.alpha_beta(child_state, depth - 1, alpha, beta, False, root_species)
+                if self.time_limit_exceeded:
+                    return 0.0
+
+                if score > best_score:
+                    best_score = score
+                    best_move_found = move
+                alpha = max(alpha, best_score)
+                if alpha >= beta:
+                    break
+        else:
+            for move in candidate_moves:
+                child_state = state.apply_moves(move, current_species, deterministic=True)
+                score = self.alpha_beta(child_state, depth - 1, alpha, beta, True, root_species)
+                if self.time_limit_exceeded:
+                    return 0.0
+
+                if score < best_score:
+                    best_score = score
+                    best_move_found = move
+                beta = min(beta, best_score)
+                if alpha >= beta:
+                    break
+
+        if not self.time_limit_exceeded:
+            flag = 0
+            if best_score <= orig_alpha:
+                flag = 2
+            elif best_score >= beta:
+                flag = 1
+            self.transposition_table[state_hash] = TranspositionEntry(depth, best_score, flag, best_move_found)
+
+        return best_score
+
+    # ---------------------------------------------------------
+    # Quiescence Search (Tactical Leaf Stabilization)
+    # ---------------------------------------------------------
+    def quiescence_search(self, state: BoardState, alpha: float, beta: float,
+                           maximizing_player: bool, root_species: Species, qdepth: int = 1) -> float:
+        self.nodes_searched += 1
+        if time.time() - self.start_time > self.max_time:
+            self.time_limit_exceeded = True
+            return 0.0
+
+        stand_pat = self.evaluate(state, root_species)
+        if qdepth <= 0:
+            return stand_pat
+
+        current_species = root_species if maximizing_player else (
+            Species.WEREWOLF if root_species == Species.VAMPIRE else Species.VAMPIRE
+        )
+        our_groups = state.get_species_groups(current_species)
+        enemy_species = Species.WEREWOLF if current_species == Species.VAMPIRE else Species.VAMPIRE
+        enemy_groups = state.get_species_groups(enemy_species)
+
+        # Stand-Pat cutoff: unconditional (Chess standard, guarantees fast beta-cutoffs)
+        if maximizing_player:
+            if stand_pat >= beta:
+                return beta
+            if stand_pat > alpha:
+                alpha = stand_pat
+        else:
+            if stand_pat <= alpha:
+                return alpha
+            if stand_pat < beta:
+                beta = stand_pat
+
+        # Tactical contact check: only proceed if adjacent (d == 1) to an enemy group
+        has_contact = any(
+            chebyshev_dist(mp, ep) == 1
+            for mp, _ in our_groups
+            for ep, _ in enemy_groups
+        )
+        if not has_contact:
+            return stand_pat
+
+        candidate_moves = self.generate_moves(state, current_species)
+        if not candidate_moves:
+            return stand_pat
+
+        # Filter strictly for deterministic tactical captures (1.5x enemy kills or direct human conversions)
+        # Quiet moves are already captured by Stand-Pat and must NOT be searched in QS
+        capture_moves = []
+        for move in candidate_moves:
+            is_capture = False
+            for x1, y1, cnt, x2, y2 in move:
+                th, tv, tw = state.get_cell((x2, y2))
+                ene_cnt = tw if current_species == Species.VAMPIRE else tv
+                if (ene_cnt > 0 and cnt >= 1.5 * ene_cnt) or (th > 0 and cnt >= th):
+                    is_capture = True
+                    break
+            if is_capture:
+                capture_moves.append(move)
+
+        if not capture_moves:
+            return stand_pat
+
+        if maximizing_player:
+            for move in capture_moves:
+                child = state.apply_moves(move, current_species, deterministic=True)
+                score = self.quiescence_search(child, alpha, beta, False, root_species, qdepth - 1)
+                if self.time_limit_exceeded:
+                    return 0.0
+                if score >= beta:
+                    return beta
+                if score > alpha:
+                    alpha = score
+            return alpha
+        else:
+            for move in capture_moves:
+                child = state.apply_moves(move, current_species, deterministic=True)
+                score = self.quiescence_search(child, alpha, beta, True, root_species, qdepth - 1)
+                if self.time_limit_exceeded:
+                    return 0.0
+                if score <= alpha:
+                    return alpha
+                if score < beta:
+                    beta = score
+            return beta
+
+    # ---------------------------------------------------------
+    # Iterative Deepening Search Root Controller
+    # ---------------------------------------------------------
+    def compute_moves(self, state: BoardState, species: Species) -> List[Tuple[int, int, int, int, int]]:
+        self.start_time = time.time()
+        self.time_limit_exceeded = False
+        self.nodes_searched = 0
+
+        candidate_moves = self.generate_moves(state, species)
+        if not candidate_moves:
+            return []
+        if len(candidate_moves) == 1:
+            return candidate_moves[0]
+
+        root_hash = self.compute_hash(state, species)
+        tt_entry = self.transposition_table.get(root_hash)
+        tt_best_move = tt_entry.best_move if tt_entry else None
+
+        best_move_overall = candidate_moves[0]
+        best_score_overall = -float('inf')
+
+        # Disable GC during search to avoid latency jitter in strict time budget
+        gc_was_enabled = gc.isenabled()
+        if gc_was_enabled:
+            gc.disable()
+
+        try:
+            # Iterative deepening is time bound, not capped at an arbitrary shallow ply count.
+            # A generous safety ceiling prevents accidental unbounded recursion on pathological states.
+            max_search_depth = max(8, min(64, state.max_turns - state.turn_count))
+            for depth in range(1, max_search_depth + 1):
+                if time.time() - self.start_time > self.max_time:
+                    break
+
+                current_best_move = None
+                current_best_score = -float('inf')
+                alpha = -float('inf')
+                beta = float('inf')
+
+                def root_move_priority(m):
+                    if m == tt_best_move:
+                        return 1000000.0
+                    pri = 0.0
+                    for x1, y1, cnt, x2, y2 in m:
+                        th, tv, tw = state.get_cell((x2, y2))
+                        ene_cnt = tw if species == Species.VAMPIRE else tv
+                        if ene_cnt > 0 and cnt >= 1.5 * ene_cnt:
+                            pri += 50000.0
+                        elif th > 0 and cnt >= th:
+                            pri += 20000.0 + th * 100.0
+                        elif ene_cnt > 0 and ene_cnt >= 1.5 * cnt:
+                            pri -= 100000.0
+                    return pri
+
+                candidate_moves.sort(key=root_move_priority, reverse=True)
+
+                for move in candidate_moves:
+                    child_state = state.apply_moves(move, species, deterministic=True)
+                    score = self.alpha_beta(child_state, depth - 1, alpha, beta, False, species)
+
+                    if self.time_limit_exceeded:
+                        break
+
+                    if score > current_best_score:
+                        current_best_score = score
+                        current_best_move = move
+
+                    alpha = max(alpha, score)
+                    if alpha >= beta:
+                        break
+
+                if not self.time_limit_exceeded and current_best_move is not None:
+                    best_move_overall = current_best_move
+                    best_score_overall = current_best_score
+                    tt_best_move = current_best_move
+                    if current_best_score >= 900000.0:
+                        break
+        finally:
+            if gc_was_enabled:
+                gc.enable()
+
+        return best_move_overall

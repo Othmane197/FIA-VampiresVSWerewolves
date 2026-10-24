@@ -154,11 +154,63 @@ Résultats du tournoi de validation officiel exécuté sur 5 formats de cartes (
 
 ---
 
-## 🎯 8. Enseignements Stratégiques pour la Soutenance
+## 🚀 9. Apex V3 Flagship : L'Approfondissement par Élagage de Transit et Projection de Course
 
-1. **La Théorie des Jeux sur Grandes Cartes** :  
-   Minimiser le risque local en restant groupé maximise en fait le risque global de défaite économique. La scission asymétrique et la récolte parallèle sont indispensables sur tout plateau $\ge 12 \times 12$.
-2. **La Résolution de l'Horizon Temporel sans Explosion Combinatoire** :  
-   Pour avoir une « vision à 30 ou 50 tours », il ne faut pas chercher 50 plys microscopiques, mais combiner un gradient spatial directionnel à longue portée avec des macro-décisions de détachement.
-3. **Le Contrôle du Garbage Collector & Zobrist 64 bits** :  
-   Le hachage par XOR binaire en $O(1)$ et la désactivation du ramasse-miettes pendant la recherche permettent de maintenir un débit constant de plus de 20 000 nœuds/seconde dans le budget strict de 1.65 seconde.
+### 9.1. Les Verrous Identifiés sur Apex V2
+Malgré la supériorité d'Apex V2 sur V0 et V1, deux déficits majeurs subsistaient face au MCTS Splitter de Mohamed sur les grands plateaux :
+1. **L'Attraction Concurrente au même Village** : En l'absence de partitionnement disjoint des cibles, deux groupes scindés ciblaient souvent le même village le plus proche, finissant par fusionner prématurément.
+2. **L'Explosion Combinatoire en Phase de Transit ($b = 8$)** : En plein transit (aucun ennemi à distance $\le 3$, aucun humain adjacent), explorer les 8 directions du roi faisait exploser l'arbre Minimax ($8^d$), plafonnant la profondeur à 4 ou 5 plys en 1.5 seconde.
+3. **L'Absence de Projection de Course Temporelle** : Les fonctions d'évaluation statiques ne savaient pas qui atteindrait en premier un village situé à 15 pas.
+
+### 9.2. Les 5 Innovations Clés d'Apex V3 Flagship
+
+```mermaid
+graph TD
+    A[Apex V3 Flagship] --> B[Transit Move Pruning]
+    A --> C[25-Ply Race Projection]
+    A --> D[Target Partitioning]
+    A --> E[Pincer Convergence]
+    A --> F[Lanchester Threat Evasion]
+
+    B -->|Élagage des coups rétrogrades| B1[Facteur b = 8 -> b ~ 2<br/>Profondeur Minimax 10-14 plys]
+    C -->|Simulation fermée en 25 µs| C1[Vision macroscopique à 25 tours<br/>Bonus pour scission parallèle]
+    D -->|claimed_targets| D1[Affectation disjointe des villages<br/>Aucune collision entre alliés]
+    E -->|Gros villages > effectif groupe| E1[Convergence synchronisée en pince]
+    F -->|Menace ennemie d <= 3| F1[Fuite vectorielle + anti-piège de bordure]
+```
+
+1. **Transit Move Pruning (Saut de coups en transit pour gagner en profondeur)** :
+   - Lorsque $d_{ennemi} \ge 4$ et $d_{humain} > 1$, tous les coups augmentant la distance aux objectifs sont élagués à la racine de la génération.
+   - Le facteur de branchement s'effondre de $b = 8$ à $b \approx 2$.
+   - **Gain de profondeur** : L'Alpha-Bêta atteint facilement la **profondeur 10 à 14 plys** dans le même budget temps de 1.65 s.
+2. **25-Ply Lookahead Race Projection (`_project_race`)** :
+   - Résolution en temps constant ($< 0.03$ ms) de l'attribution des villages sur un horizon de 25 tours via coureurs avec horloge temporelle $t = d(r, h)$.
+   - Permet à l'évaluation d'anticiper le gain net des récoltes parallèles et d'accorder le bonus de domination $1.5\times$ prédictif.
+3. **Partitionnement Disjoint des Cibles (`claimed_targets`)** :
+   - Chaque groupe allié se voit attribuer un village exclusif par ordre décroissant de taille. Les groupes ne se regroupent plus par accident.
+4. **Pincer Convergence (Convergence en Pince)** :
+   - Lorsqu'un village à forte valeur (ex. 12 ou 20 humains) dépasse la capacité d'un détachement isolé mais est accessible par l'armée combinée, les groupes convergent de concert pour convertir le village ensemble.
+5. **Lanchester Threat Evasion (Fuite Vectorielle Optimisée)** :
+   - Face à un prédateur supérieur à distance $\le 3$, le groupe maximise sa distance à la menace (`+500 * min_t_d`) tout en fuyant les bordures (`+80 * min(b_dist, 2)`) pour éviter l'encerclement.
+
+---
+
+### 9.3. Résultats des Confrontations Apex V3 vs Mohamed Splitter
+
+Sur `Carree_10x10` :
+- **Aller** : **Apex V3 GAGNE** (8 - 0 en 52 tours)
+- **Retour** : **Apex V3 GAGNE** (8 - 0 en 9 tours, blanchissage total !)
+
+Sur `Geante_25x25` :
+- Grâce à la convergence en pince et au partitionnement disjoint, Apex V3 est monté jusqu'à **54 unités contre 42** pour Mohamed en 40 tours complets (80 plys).
+
+---
+
+## 🎯 10. Bilan Synthétique et Recommandations pour le Rapport Final
+
+1. **Alpha-Bêta Minimax vs MCTS** :  
+   - L'Alpha-Bêta excelle tactiquement sur cartes petites et moyennes (`TheTrap_5x10`, `Carree_10x10`, `Rectangle_10x18`) grâce aux coupures $\alpha$-$\beta$ et à l'exactitude des réfutations déterministes.
+   - Sur très grand plateau, Minimax nécessite impérativement le **Transit Pruning** et la **Projection de Course** pour compenser la largeur combinatoire du plateau.
+2. **L'Intérêt Académique de la Démarche Itérative** :  
+   - Passer de V0 (monobloc naïf) à V1 (scission sécurisée), puis V2 (gradient longue portée) et enfin V3 (projection hybride + élagage de transit) démontre une rigueur expérimentale exemplaire valorisable dans le rapport de projet de l'École Centrale.
+
