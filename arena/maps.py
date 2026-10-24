@@ -130,14 +130,25 @@ _SPECS = {
     "sparse": [
         ("sparse_12x20", 41, 12, 20, 10, 3, 4, 9, None, None),
     ],
+    # FRESH family (campaign 3): never seen by any tuning or earlier validation; final check only
+    "fresh": [
+        ("fr_10x14", 201, 10, 14, 9, 6, 1, 5, None, None),
+        ("fr_12x22v", 202, 12, 22, 12, 11, 1, 4, None, None),
+        ("fr_14x18p", 203, 14, 18, 10, 3, 2, 6, 22, None),
+        ("fr_9x13c", 204, 9, 13, 10, 5, 1, 5, 8, 4),
+        ("fr_13x27", 205, 13, 27, 12, 8, 1, 7, 14, None),
+        ("fr_11x16s", 206, 11, 16, 10, 3, 4, 9, None, None),
+        ("fr_20x32", 207, 20, 32, 14, 14, 1, 6, 16, None),
+        ("fr_12x12", 208, 12, 12, 11, 6, 2, 7, 10, 5),
+    ],
 }
 
 _cache: Dict[str, List[Tuple[str, State]]] = {}
 
 
 def build_suite(name: str = "all", max_ply: int = 200) -> List[Tuple[str, State]]:
-    """name: 'all' (the 14 tuning maps), 'given', a family name ('holdout' = validation only),
-    or a comma-separated list of map names/families."""
+    """name: 'all' (the 14 tuning maps), 'given', a family name ('holdout' = validation only,
+    'fresh' = campaign 3's final check only), or a comma-separated list of map names/families."""
     key = f"{name}:{max_ply}"
     if key in _cache:
         return _cache[key]
@@ -148,8 +159,8 @@ def build_suite(name: str = "all", max_ply: int = 200) -> List[Tuple[str, State]
         for nm, seed, rows, cols, army, pairs, hmin, hmax, center, gap in specs:
             every.append((nm, symmetric_map(seed, rows, cols, army, pairs, hmin, hmax, center, gap, max_ply)))
             families[fam].append(nm)
-    if name == "all":                     # the TUNING maps: never the hold-out family
-        out = [m for m in every if m[0] not in families["holdout"]]
+    if name == "all":                     # the TUNING maps: never the hold-out or fresh families
+        out = [m for m in every if m[0] not in families["holdout"] and m[0] not in families["fresh"]]
     else:
         wanted = []
         for part in name.split(","):

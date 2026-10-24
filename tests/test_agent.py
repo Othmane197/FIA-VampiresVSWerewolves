@@ -41,6 +41,14 @@ class TestPuzzles(unittest.TestCase):
         self.assertEqual(dests.get((3, 4)), 3, moves)
         self.assertEqual(dests.get((5, 4)), 3, moves)
 
+    def test_does_not_offer_a_desperate_opponent_a_shot(self):
+        # stage-2 loss (ho_11x11, ply 33): 40 vampires lead 40 to 26, no humans left. Stepping next
+        # to the 17 lets them strike first at 21%, which a losing bot takes: it wiped us out
+        s = State(11, 11, {}, {(5, 3): 40}, {(5, 5): 17, (8, 2): 9}, 32)
+        moves = agent(0.4, desperate_p=0.1).choose(s.copy(), V)
+        for _, _, _, x2, y2 in moves:
+            self.assertTrue(all(cheb((x2, y2), e) > 1 for e in s.groups[W]), moves)
+
     def test_converges_two_groups_on_a_big_house(self):
         # 6 + 6 vampires next to a house of 10: only a synchronized entry converts it
         s = State(9, 15, {(5, 4): 10}, {(4, 3): 6, (6, 5): 6}, {(14, 0): 8})
@@ -93,6 +101,38 @@ class TestSafety(unittest.TestCase):
                 ok, why = check_moves(s.rows, s.cols, s.groups[side], moves)
                 self.assertTrue(ok, f"{why} {moves} {s}")
                 self.assertIsNone(a.last_error, a.last_error)
+
+    def test_splitter_r_options_never_illegal(self):
+        rng = random.Random(9)
+        a = SplitterAgent(time_limit=0.05, seed=4, game_seconds=None, rollout_policy="race", rollout_strike=0.45,
+                          rollout_depth_contact=6, leaf_mix=0.5, race_root=True, bait_check=True,
+                          trust_plans=True, plan_cache=True, reuse=True, strike_p=0.55, opp_race=True,
+                          desperate_p=0.1)
+        for i in range(40):
+            rows, cols = rng.randint(3, 12), rng.randint(3, 16)
+            cells = rng.sample([(x, y) for x in range(cols) for y in range(rows)], min(rows * cols, 9))
+            s = State(rows, cols, {c: rng.randint(1, 20) for c in cells[2:5]} if i % 4 else {},
+                      {cells[0]: rng.randint(1, 40), **({cells[5]: rng.randint(1, 9)} if i % 2 else {})},
+                      {cells[1]: rng.randint(1, 40), **({cells[6]: rng.randint(1, 9)} if i % 3 else {})},
+                      rng.randint(0, 190))
+            for side in (V, W):
+                moves = a.choose(s.copy(), side)
+                ok, why = check_moves(s.rows, s.cols, s.groups[side], moves)
+                self.assertTrue(ok, f"{why} {moves} {s}")
+                self.assertIsNone(a.last_error, a.last_error)
+
+    def test_tree_reuse_and_cache_find_their_targets(self):
+        from arena.maps import build_suite
+        from arena.opponents import SplitterBot
+        from arena.referee import play_game
+        state = dict(build_suite("given"))["thetrap"]
+        state.max_ply = 30
+        bot = SplitterBot("r", {"time_limit": 0.15, "reuse": True, "plan_cache": True, "seed": 1})
+        r = play_game(state, {V: bot, W: SplitterBot("plain", {"time_limit": 0.15, "seed": 2})}, seed=4)
+        self.assertNotIn(r.reason, ("crash", "illegal"))
+        self.assertIsNone(bot.agent.last_error, bot.agent.last_error)
+        self.assertGreater(bot.agent.reuse_tries, 5)
+        self.assertGreater(bot.agent.reuse_hits, 0)      # the opponent plays plans our tree contains
 
     def test_tournament_client_selects_the_model(self):
         from ai_agent import AIAgent

@@ -25,7 +25,8 @@ class AIAgent:
     detachments). Any failure falls back to the original starter logic below.
 
     Environment knobs (optional): SPLITTER_TIME (seconds per move, default 1.5),
-    SPLITTER_MODEL=backup (play the backup model instead of the flagship, splitter.agent.MODELS),
+    SPLITTER_MODEL=backup or r (play the backup model or the Splitter-R candidate instead of the
+    flagship, splitter.agent.MODELS),
     SPLITTER_VERBOSE=1 (print the search statistics every turn).
     """
 

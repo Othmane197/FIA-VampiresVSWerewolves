@@ -2,8 +2,9 @@
 Real-conditions matches: our tournament bot against each teammate's bot, 4 games each (2 as
 Vampires, 2 as Werewolves), recorded.
 
-    python tools/teammate_matches.py                       # the flagship vs Apex, TacticalSplitter, RaceMCTS, Expecti
+    python tools/teammate_matches.py                       # the flagship vs the teammates' LIVE bots
     python tools/teammate_matches.py --model backup        # the backup model instead
+    python tools/teammate_matches.py --model r             # the Splitter-R candidate (chapter 16)
     python tools/teammate_matches.py --opp Apex RaceMCTS   # only some opponents
     python tools/teammate_matches.py --all                 # every bot on the teammates' branches
     python tools/teammate_matches.py --no-update           # replay the versions already downloaded
@@ -23,7 +24,8 @@ WHAT "REAL CONDITIONS" MEANS HERE
   * The official limits: 200 plies in total and a 5-minute game clock (MaxGameDuration).
   * Our side is the real tournament client, main.py (with its watchdog), as launched on tournament
     day; each teammate's bot runs as its own client process (tools/play_bot.py).
-  * Every bot thinks 1.5 s per move (ours and theirs, --time / --opp-time).
+  * We think 1.5 s per move (--time). The live bots (default) use their own budgets: Apex-live
+    1.65 s, RaceMCTS-live 1.6 s, Expecti-live 1.2 s; other teammate bots use --opp-time.
   * One game at a time by default: no other game competes for the CPU.
   * NONE of the arena's speed-ups: every game is played to its real end (no informative-slot
     selection, no early stopping, no shortened thinking time).
@@ -63,13 +65,15 @@ from tools.fake_server import FakeServer
 
 # The teammates' bots, and the git branch each comes from (arena/fetch_opponents.py)
 TEAMMATE_BOTS = {
+    # live tournament entry points (their own presets and time budgets): the default opponents
+    "Apex-live": "Othmane", "RaceMCTS-live": "Ronita", "Expecti-live": "Dana",
     "Apex": "Othmane", "TacticalSplitter": "Othmane",        # Othmane's main bots
     "RaceMCTS": "Ronita",                                     # Ronita's MCTS
     "Expecti": "Dana",                                        # Dana's expectiminimax
     "Greedy": "Othmane", "PotentialField": "Othmane", "ShallowMinimax": "Othmane",
     "MonteCarlo": "Othmane", "Grabber": "Dana", "Rusher": "Dana", "Turtle": "Dana",
 }
-MAIN_BOTS = ["Apex", "TacticalSplitter", "RaceMCTS", "Expecti"]
+MAIN_BOTS = ["Apex-live", "RaceMCTS-live", "Expecti-live"]
 VENDOR = os.path.join(ROOT, "arena", "vendor")
 HISTORY = os.path.join(ROOT, "arena", "results", "history.csv")
 FIELDS = ["opponent", "opponent_version", "game", "map", "we_connect_first", "our_species", "result",
@@ -262,7 +266,8 @@ def store_history(rows, a, run_id: str):
 def main():
     """Command line: update the teammates' bots, play every (opponent, game), record, summarize."""
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--model", choices=("flagship", "backup"), default="flagship", help="which of our two models plays")
+    ap.add_argument("--model", choices=("flagship", "backup", "r"), default="flagship",
+                    help="which of our models plays (r = the Splitter-R candidate, chapter 16)")
     ap.add_argument("--opp", nargs="+", default=None, help=f"opponents (default: {' '.join(MAIN_BOTS)})")
     ap.add_argument("--all", action="store_true", help="every teammate bot: " + " ".join(TEAMMATE_BOTS))
     ap.add_argument("--games", type=int, default=4,

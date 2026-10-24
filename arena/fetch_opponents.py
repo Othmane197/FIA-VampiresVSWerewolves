@@ -30,9 +30,14 @@ REQUIRED = {
 }
 
 
-def _git(*args) -> subprocess.CompletedProcess:
-    """Run a git command in the repo (never raises; check returncode)."""
-    return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, check=False)
+def _git(*args, timeout: Optional[float] = None) -> subprocess.CompletedProcess:
+    """Run a git command in the repo (never raises, never prompts; check returncode)."""
+    env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
+    try:
+        return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, check=False,
+                              env=env, timeout=timeout)
+    except subprocess.TimeoutExpired:            # a half-working network: give up, use the last download
+        return subprocess.CompletedProcess(["git", *args], 1, "", f"timed out after {timeout:.0f} s")
 
 
 def fetch(do_git_fetch: bool = False, branches: Optional[Iterable[str]] = None, log=print) -> Dict[str, dict]:
@@ -45,7 +50,7 @@ def fetch(do_git_fetch: bool = False, branches: Optional[Iterable[str]] = None, 
     branches = list(branches or BRANCHES)
     updated = False
     if do_git_fetch and branches:
-        res = _git("fetch", "origin", *branches, "-q")
+        res = _git("fetch", "origin", *branches, "-q", timeout=120)
         updated = res.returncode == 0
         if not updated:
             log(f"  !! git fetch failed ({res.stderr.strip() or 'no network?'}): "

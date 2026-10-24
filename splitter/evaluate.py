@@ -35,6 +35,7 @@ class EvalParams:
     discount: float = DISCOUNT     # value of a house t moves away: h * discount**t
     k0: float = 6.0                # sigmoid steepness at the start of the game ...
     k1: float = 14.0               # ... plus k1 * progress (20 at the end)
+    opp_strike_p: float = 0.3      # exposure: the opponent strikes us from these odds (desperate_p lowers it)
 
 
 DEFAULT_EVAL = EvalParams()
@@ -197,7 +198,7 @@ def evaluate(state: State, side: int, to_move: int, remaining_plies: Optional[fl
     a, b = project_race(ours, theirs, humans, head, horizon, ev)
     # the side that just took its immediate gains is the one NOT to move next
     enemy_next = (to_move == side)
-    a -= exposure(ours, theirs, enemy_next)
+    a -= exposure(ours, theirs, enemy_next, ev.opp_strike_p)
     b -= exposure(theirs, ours, not enemy_next)
     a = max(a, 0.1)
     b = max(b, 0.1)

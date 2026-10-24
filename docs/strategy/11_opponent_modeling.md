@@ -82,7 +82,7 @@ feature:
 | Use | Where | Measured effect |
 |---|---|---|
 | **Rollouts:** a gambling opponent strikes first in our rollouts | `MCTS._read_opponent_model`, `_strike` | Together with the next row: the gain on the tuning set (+7 to +10, chapter 12.4) |
-| **Evaluation:** against an opponent never seen taking long shots, adjacent 30–50% threats are ignored (`exposure(strike_p=0.5)`) | [`exposure`](../../splitter/evaluate.py#L140) | (see above) |
+| **Evaluation:** against an opponent never seen taking long shots, adjacent 30–50% threats are ignored (`exposure(strike_p=0.5)`) | [`exposure`](../../splitter/evaluate.py#L141) | (see above) |
 | **Adaptive settings:** passive non-gambler → `reserve_radius` − 2; aggressor or gambler → +1 and `safety_margin` + 1; splitter → hunt bonus | `SplitterAgent._adapt_settings` | +1.8 overall and +10.7 vs RaceMCTS, compared with the model without adaptation |
 
 ## 11.6 Archive: removed predictors (deleted from the code after measurement)
@@ -148,7 +148,7 @@ earlier in this iteration. `State.apply` then raised, the whole search for that 
 the safety net played the plain fallback move.
 
 **How often:** this happened on **4.1% of v5's turns.** The fix checks the plan at expansion, as
-the descent step already did ([`MCTS._iterate`](../../splitter/mcts.py#L122)).
+the descent step already did ([`MCTS._iterate`](../../splitter/mcts.py#L231)).
 
 **Effect** (paired, 504 games):
 - **+2.2 points** against the panel;

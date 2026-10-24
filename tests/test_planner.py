@@ -52,6 +52,103 @@ class TestLegality(unittest.TestCase):
             self.assertNotIn(dst, s.humans)
 
 
+class TestSplitterR(unittest.TestCase):
+    def test_race_rollouts_and_root_plans_are_legal(self):
+        from splitter.planner import race_plans, race_rollout_plan
+        rng = random.Random(7)
+        n = 0
+        for _ in range(400):
+            s = random_state(rng)
+            for side in (V, W):
+                if not s.groups[side]:
+                    continue
+                for strike in (0.0, 0.45):
+                    moves = race_rollout_plan(s, side, rng, 0.15, strike)
+                    ok, why = check_moves(s.rows, s.cols, s.groups[side], moves)
+                    self.assertTrue(ok, f"{why}: {moves} in {s}")
+                for p in race_plans(s, side):
+                    n += 1
+                    ok, why = check_moves(s.rows, s.cols, s.groups[side], p.moves)
+                    self.assertTrue(ok, f"{why}: {p.tag} {p.moves} in {s}")
+        self.assertGreater(n, 300)
+
+    def test_fast_race_rollouts_match_the_reference(self):
+        # race_rollout_plan is an optimized copy of this reference (_race_goals + _race_step):
+        # same moves and same random draws, on every position
+        from splitter.planner import MAX_CELL, _race_goals, _race_step, race_rollout_plan
+        from splitter.rules import cheb, win_probability
+
+        def reference(s, side, rng, eps, strike_p):
+            mine, enemies, sources, moves = s.groups[side], s.groups[1 - side], set(s.groups[side]), {}
+            for pos, cnt in sorted(mine.items(), key=lambda g: -g[1]):
+                dst = None
+                if strike_p > 0.0:
+                    best = None
+                    for ep, e in enemies.items():
+                        if cheb(pos, ep) == 1 and cnt < 1.5 * e:
+                            p = win_probability(cnt, e, False)
+                            if p >= strike_p and (best is None or p * e > best[0]):
+                                best = (p * e, ep)
+                    if best is not None:
+                        dst = best[1]
+                if dst is None:
+                    goals = _race_goals(s, pos, cnt, mine, enemies)
+                    goal = goals[1][1] if len(goals) > 1 and rng.random() < eps else goals[0][1]
+                    dst = _race_step(s, side, pos, cnt, goal, sources, enemies)
+                if dst is not None:
+                    moves[(pos, dst)] = moves.get((pos, dst), 0) + cnt
+            out = tuple((a[0], a[1], n, d[0], d[1]) for (a, d), n in moves.items() if mine.get(d, 0) + n <= MAX_CELL)
+            return out or fallback_plan(s, side).moves
+
+        rng = random.Random(13)
+        for i in range(500):
+            s = random_state(rng)
+            for side in (V, W):
+                if s.groups[side]:
+                    strike = 0.45 if i % 2 else 0.0
+                    self.assertEqual(race_rollout_plan(s, side, random.Random(i), 0.15, strike),
+                                     reference(s, side, random.Random(i), 0.15, strike), str(s))
+
+    def test_bait_check_refuses_the_trap(self):
+        # our 9 can kill the enemy 4 for sure, but an enemy 12 stands next to it: after the kill,
+        # the 12 would strike our 9 at better than even odds
+        s = State(6, 6, {}, {(1, 2): 9}, {(2, 2): 4, (3, 2): 12})
+        def base_takes_bait(cfg):
+            base = next(p for p in generate_plans(s, V, cfg) if p.tag == "base")
+            return any((m[3], m[4]) == (2, 2) for m in base.moves)
+        self.assertTrue(base_takes_bait(PlanConfig()))                    # the flagship walks into it
+        self.assertFalse(base_takes_bait(PlanConfig(bait_check=True)))     # Splitter-R flees instead
+
+    def test_strike_plan_offered_when_not_behind(self):
+        # 13 vampires next to 10 werewolves: not a sure kill (13 < 15), but a strike wins 80%
+        s = State(7, 7, {(0, 6): 2}, {(3, 3): 13}, {(4, 3): 10})
+        strike = (3, 3, 13, 4, 3)
+        self.assertFalse(any(strike in p.moves for p in generate_plans(s, V, PlanConfig())))
+        plans = generate_plans(s, V, PlanConfig(strike_p=0.6))
+        self.assertTrue(any(p.tag == "strike" and strike in p.moves for p in plans))
+        # 11 vs 10 wins only 60%: below a 0.65 threshold, no strike plan
+        s = State(7, 7, {(0, 6): 2}, {(3, 3): 11}, {(4, 3): 10})
+        self.assertFalse(any(p.tag == "strike" for p in generate_plans(s, V, PlanConfig(strike_p=0.65))))
+        rng = random.Random(17)
+        for _ in range(300):
+            s = random_state(rng)
+            for side in (V, W):
+                if s.groups[side]:
+                    for p in generate_plans(s, side, PlanConfig(strike_p=0.55)):
+                        ok, why = check_moves(s.rows, s.cols, s.groups[side], p.moves)
+                        self.assertTrue(ok, f"{why}: {p.tag} {p.moves}")
+
+    def test_trusted_plans_are_still_legal(self):
+        rng = random.Random(11)
+        for _ in range(300):
+            s = random_state(rng)
+            for side in (V, W):
+                if s.groups[side]:
+                    for p in generate_plans(s, side, PlanConfig(trust_plans=True, bait_check=True)):
+                        ok, why = check_moves(s.rows, s.cols, s.groups[side], p.moves)
+                        self.assertTrue(ok, f"{why}: {p.tag} {p.moves}")
+
+
 class TestSplits(unittest.TestCase):
     def test_split_generated_for_two_small_houses(self):
         # 10 vampires, houses of 3 on both sides, enemy far away -> a 3 + 3 (+4) split must exist

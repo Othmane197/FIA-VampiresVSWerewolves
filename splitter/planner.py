@@ -11,7 +11,8 @@ each turn we only consider a SHORT list of sensible joint plans:
     creatures to houses of size h (a sure conversion, the detachment comes back with 2h), while
     the main body keeps the rest. A detachment is only allowed if detachment_safe() proves that
     no enemy can catch it before or right after it converts;
-  * REGROUP, HUNT, FLEE and (when losing) GAMBLE plans give the search strategic alternatives.
+  * REGROUP, HUNT, FLEE and (when losing) GAMBLE plans give the search strategic alternatives;
+    with the strike_p option, STRIKE plans also offer good-odds first strikes when not losing.
 
 Each goal is turned into one step by safe_step(), which never walks into humans or enemies it
 cannot beat for sure and avoids cells that an enemy could attack with good odds.
@@ -24,7 +25,7 @@ from .rules import MAX_CELL, Move, Pos, cheb, check_moves, win_probability
 from .state import State
 
 GAMMA = 0.9          # a house d moves away is worth GAMMA**d of a house next to us
-PROTECTED = ("base", "flee", "regroup", "regroup+go", "hunt")
+PROTECTED = ("base", "flee", "regroup", "regroup+go", "hunt", "strike")
 
 
 @dataclass
@@ -45,6 +46,13 @@ class PlanConfig:
     commit_bonus: float = 0.35     # value bonus for keeping last turn's goal (stops oscillation)
     pincer: bool = True            # synchronized multi-group conversion of a house too big for one group
     hunt_bonus: float = 0.1        # prior bonus of the "hunt" plan (raised against splitting opponents)
+    # ---- Splitter-R options (campaign 3, chapter 16), off by default
+    bait_check: bool = False       # discount a kill whose victim cell sits next to another strong enemy
+    trust_plans: bool = False      # skip re-checking builder-made plans (legal by construction)
+    strike_p: float = 0.0          # > 0: "strike" plans against adjacent enemies beaten with these odds,
+                                   # even when not behind (0 = only gambles when behind, the flagship)
+    gamble_p: float = 0.3          # gamble goals from these odds (lower for a desperate opponent)
+    threat_p: float = 0.3          # an enemy within 2 that strikes with these odds is a threat (flee)
 
 
 @dataclass
@@ -97,6 +105,21 @@ def enemy_attack_loss(cell: Pos, count: int,
                 loss = p * count
                 worst = max(worst, loss)
     return worst
+
+
+def bait_factor(cell: Pos, count: int, enemies: Dict[Pos, int]) -> float:
+    """
+    bait_check option: after a sure kill on `cell` our `count` creatures stand there. Another enemy
+    group next to that cell could then kill them for sure (x 0.1) or strike at 50%+ (x 0.4).
+    """
+    factor = 1.0
+    for ep, e in enemies.items():
+        if ep != cell and cheb(ep, cell) <= 1:
+            if e >= 1.5 * count:
+                return 0.1
+            if e >= count:
+                factor = 0.4
+    return factor
 
 
 def race_won(dist_us: int, target: Pos, need: int, enemies: Dict[Pos, int], we_move_first: bool = True) -> bool:
@@ -239,14 +262,17 @@ def candidate_goals(state: State, pos: Pos, count: int, friends: Dict[Pos, int],
     for ep, e in enemies.items():
         if count >= 1.5 * e and ep not in claimed:
             d = cheb(pos, ep)
-            goals.append(Goal("kill", ep, 1.3 * e * GAMMA ** max(d - 1, 0) + 0.5, int(1.5 * e + 0.999)))
+            v = 1.3 * e * GAMMA ** max(d - 1, 0) + 0.5
+            if cfg.bait_check:
+                v *= bait_factor(ep, count, enemies)
+            goals.append(Goal("kill", ep, v, int(1.5 * e + 0.999)))
     # threats: enemies that can kill us for sure soon, or strike with decent odds right now
     threat = 0.0
     threat_cells = []
     for ep, e in enemies.items():
         d = cheb(ep, pos)
         p = win_probability(e, count, False)
-        if (e >= 1.5 * count and d <= 3) or (d <= 2 and p >= 0.3):
+        if (e >= 1.5 * count and d <= 3) or (d <= 2 and p >= cfg.threat_p):
             threat = max(threat, p * count / d)
             threat_cells.append(ep)
     if threat_cells:
@@ -263,12 +289,12 @@ def candidate_goals(state: State, pos: Pos, count: int, friends: Dict[Pos, int],
             if cheb(pos, ep) == 1 and count < 1.5 * e:
                 p = win_probability(count, e, False)
                 # striking first at >= 30% can beat waiting to be struck: let the search judge
-                if p >= 0.3:
+                if p >= cfg.gamble_p:
                     goals.append(Goal("gamble", ep, max(0.05, p * e - (1 - p) * count)))
         for hp, h in state.humans.items():
             if cheb(pos, hp) == 1 and count < h:
                 p = win_probability(count, h, True)
-                if p >= 0.3:
+                if p >= cfg.gamble_p:
                     goals.append(Goal("gamble", hp, p * p * (count + h) - count))
     if not goals or all(g.value <= 0.05 for g in goals):
         # nothing to do: walk towards the closest enemy we are not afraid of, or the centre
@@ -363,9 +389,10 @@ def generate_plans(state: State, side: int, cfg: Optional[PlanConfig] = None,
         moves, plan_intents = builder.build(orders)
         if not moves or moves in seen:
             return
-        ok, _ = check_moves(state.rows, state.cols, mine, moves)
-        if not ok:
-            return
+        if not cfg.trust_plans:                 # Splitter-R trusts the builder; the tree re-checks
+            ok, _ = check_moves(state.rows, state.cols, mine, moves)
+            if not ok:
+                return
         seen.add(moves)
         plans.append(Plan(moves, _orders_value(orders) + bonus, tag, plan_intents))
 
@@ -420,7 +447,8 @@ def generate_plans(state: State, side: int, cfg: Optional[PlanConfig] = None,
     # 4. hunt: everybody that can kill an enemy group goes for it
     hunt_fixed = {}
     for pos, cnt in groups:
-        kills = [g for g in goals_of[pos] if g.kind == "kill"]
+        kills = [g for g in goals_of[pos] if g.kind == "kill"
+                 and (not cfg.bait_check or bait_factor(g.target, cnt, enemies) >= 0.5)]
         if kills:
             hunt_fixed[pos] = kills[0]
     if hunt_fixed:
@@ -440,6 +468,18 @@ def generate_plans(state: State, side: int, cfg: Optional[PlanConfig] = None,
             if g.kind == "gamble":
                 orders, _ = assign(set(), {pos: g})
                 add(orders, "gamble")
+
+    # 6b. first strikes (strike_p option): next to an enemy we beat with good but uncertain odds,
+    #     striking first can beat waiting to be struck; the base plan is unchanged, the search judges
+    gambles_on = (behind or cfg.gamble == "always") and cfg.gamble != "never"
+    if cfg.strike_p > 0.0 and not gambles_on:
+        for pos, cnt in groups[:3]:
+            for ep, e in enemies.items():
+                if cheb(pos, ep) == 1 and cnt < 1.5 * e:
+                    p = win_probability(cnt, e, False)
+                    if p >= cfg.strike_p:
+                        orders, _ = assign(set(), {pos: Goal("gamble", ep, max(0.05, p * e - (1 - p) * cnt))})
+                        add(orders, "strike")
 
     if not plans:
         plans.append(fallback_plan(state, side))
@@ -613,3 +653,222 @@ def quick_plan(state: State, side: int) -> Tuple[Move, ...]:
     for x1, y1, n, x2, y2 in moves:
         merged[(x1, y1, x2, y2)] = merged.get((x1, y1, x2, y2), 0) + n
     return tuple((k[0], k[1], n, k[2], k[3]) for k, n in merged.items())
+
+
+# ---------------------------------------------------------------------------- Splitter-R (campaign 3)
+# RaceMCTS's ideas (Ronita's mcts_agent.py), re-implemented on our exact rules: its cheap goal
+# scoring and step, used for long stochastic rollouts and as extra (aggressive) root plans.
+
+def _race_goals(state: State, pos: Pos, cnt: int, mine: Dict[Pos, int],
+                enemies: Dict[Pos, int]) -> List[Tuple[float, Pos]]:
+    """RaceMCTS's goal list for one group, best first: convert, sure kill, regroup, flee, chase."""
+    goals: List[Tuple[float, Pos]] = []
+    for hp, h in state.humans.items():
+        if cnt >= h:
+            goals.append((h / (cheb(pos, hp) + 0.5), hp))
+    for ep, e in enemies.items():
+        if cnt >= 1.5 * e:
+            goals.append((1.2 * e / (cheb(pos, ep) + 0.5), ep))
+    friends = [(p, c) for p, c in mine.items() if p != pos]
+    if friends:
+        fpos, fcnt = min(friends, key=lambda f: cheb(pos, f[0]))
+        goals.append((0.3 * fcnt / (cheb(pos, fpos) + 0.5), fpos))
+    danger = [ep for ep, e in enemies.items() if e >= 1.5 * cnt and cheb(pos, ep) <= 3]
+    if danger:
+        flee = max(state.nbrs[pos], key=lambda n: min(cheb(n, ep) for ep in danger))
+        goals.append((0.5 * cnt, flee))
+    if not goals and enemies:
+        goals.append((0.01, min(enemies, key=lambda ep: cheb(pos, ep))))
+    if not goals:
+        goals.append((0.0, (state.cols // 2, state.rows // 2)))
+    goals.sort(key=lambda g: -g[0])
+    return goals
+
+
+def _race_step(state: State, side: int, src: Pos, cnt: int, goal: Pos, forbidden: Set[Pos],
+               enemies: Dict[Pos, int]) -> Optional[Pos]:
+    """One step towards goal: least danger from sure-killers, then closest; never into a fight we cannot win for sure."""
+    best, best_key = None, None
+    for n in state.nbrs[src]:
+        if n in forbidden:
+            continue
+        e = enemies.get(n, 0)
+        if e and cnt < 1.5 * e:
+            continue
+        h = state.humans.get(n, 0)
+        if h and cnt < h:
+            continue
+        if state.groups[side].get(n, 0) + cnt > MAX_CELL:
+            continue
+        danger = 0
+        if n != goal:
+            for tp, te in enemies.items():
+                if te >= 1.5 * cnt and cheb(n, tp) <= 1:
+                    danger += te
+        key = (danger, cheb(n, goal), abs(n[0] - goal[0]) + abs(n[1] - goal[1]))
+        if best_key is None or key < best_key:
+            best, best_key = n, key
+    return best
+
+
+def race_rollout_plan(state: State, side: int, rng, eps: float = 0.15, strike_p: float = 0.0) -> Tuple[Move, ...]:
+    """
+    Splitter-R rollout policy (RaceMCTS's, on our rules): every group takes its best goal, its
+    second with probability eps; with strike_p > 0 a group adjacent to an enemy it beats with
+    at least that probability strikes first (the tactic RaceMCTS wins games with).
+    """
+    # Same moves as _race_goals + _race_step (checked on 1,896 positions), 33% faster: only the
+    # best two goals are kept (ties: first listed wins, like the stable sort), distances inlined,
+    # and the sure-killers listed once per group instead of once per neighbour.
+    mine = state.groups[side]
+    if not mine:
+        return ()
+    enemies = state.groups[1 - side]
+    humans = state.humans
+    moves: Dict[Tuple[Pos, Pos], int] = {}
+    for pos, cnt in sorted(mine.items(), key=lambda g: -g[1]):
+        px, py = pos
+        dst = None
+        if strike_p > 0.0:
+            best = None
+            for ep, e in enemies.items():
+                if cnt < 1.5 * e and max(abs(ep[0] - px), abs(ep[1] - py)) == 1:
+                    p = win_probability(cnt, e, False)
+                    if p >= strike_p and (best is None or p * e > best[0]):
+                        best = (p * e, ep)
+            if best is not None:
+                dst = best[1]
+        if dst is None:
+            top = [None, None, None, None]          # best value, its cell, second value, its cell
+            for hp, h in humans.items():
+                if cnt >= h:
+                    _offer(top, h / (max(abs(hp[0] - px), abs(hp[1] - py)) + 0.5), hp)
+            killers = []
+            for ep, e in enemies.items():
+                d = max(abs(ep[0] - px), abs(ep[1] - py))
+                if cnt >= 1.5 * e:
+                    _offer(top, 1.2 * e / (d + 0.5), ep)
+                if e >= 1.5 * cnt:
+                    killers.append((ep, e, d))
+            fpos, fd, fcnt = None, 0, 0
+            for p, c in mine.items():
+                if p != pos:
+                    d = max(abs(p[0] - px), abs(p[1] - py))
+                    if fpos is None or d < fd:
+                        fpos, fd, fcnt = p, d, c
+            if fpos is not None:
+                _offer(top, 0.3 * fcnt / (fd + 0.5), fpos)
+            danger = [k[0] for k in killers if k[2] <= 3]
+            if danger:
+                _offer(top, 0.5 * cnt, max(state.nbrs[pos], key=lambda n: min(cheb(n, q) for q in danger)))
+            goal = top[1]
+            if goal is None:
+                goal = (min(enemies, key=lambda q: cheb(pos, q)) if enemies
+                        else (state.cols // 2, state.rows // 2))
+            elif top[3] is not None and rng.random() < eps:
+                goal = top[3]
+            dst = _race_step_fast(state, pos, cnt, goal, mine, enemies, killers)
+        if dst is not None:
+            moves[(pos, dst)] = moves.get((pos, dst), 0) + cnt
+    out = tuple((s[0], s[1], n, d[0], d[1]) for (s, d), n in moves.items()
+                if mine.get(d, 0) + n <= MAX_CELL)
+    return out or fallback_plan(state, side).moves
+
+
+def _offer(top: list, v: float, cell: Pos):
+    """Keep the best two (value, cell) in top = [v1, cell1, v2, cell2]; a tie keeps the earlier one."""
+    if top[0] is None or v > top[0]:
+        top[2], top[3], top[0], top[1] = top[0], top[1], v, cell
+    elif top[2] is None or v > top[2]:
+        top[2], top[3] = v, cell
+
+
+def _race_step_fast(state: State, src: Pos, cnt: int, goal: Pos, mine: Dict[Pos, int],
+                    enemies: Dict[Pos, int], killers: List[Tuple[Pos, int, int]]) -> Optional[Pos]:
+    """_race_step for rollouts: our own cells are the forbidden sources, `killers` = enemies >= 1.5 cnt."""
+    best, best_key = None, None
+    gx, gy = goal
+    humans = state.humans
+    for n in state.nbrs[src]:
+        if n in mine or cnt > MAX_CELL:
+            continue
+        e = enemies.get(n, 0)
+        if e and cnt < 1.5 * e:
+            continue
+        h = humans.get(n, 0)
+        if h and cnt < h:
+            continue
+        danger = 0
+        if n != goal:
+            for tp, te, _ in killers:
+                if max(abs(n[0] - tp[0]), abs(n[1] - tp[1])) <= 1:
+                    danger += te
+        dx, dy = abs(n[0] - gx), abs(n[1] - gy)
+        key = (danger, max(dx, dy), dx + dy)
+        if best_key is None or key < best_key:
+            best, best_key = n, key
+    return best
+
+
+def race_plans(state: State, side: int, max_plans: int = 6) -> List[Plan]:
+    """
+    Splitter-R root plans (RaceMCTS's plan families, on our rules): every group to its best goal,
+    whole-group splits to two houses, regroup on the biggest, one group on its second goal.
+    No safety checks on purpose: they are the aggressive options our search then judges.
+    """
+    mine = state.groups[side]
+    if not mine:
+        return []
+    enemies = state.groups[1 - side]
+    groups = sorted(mine.items(), key=lambda g: (-g[1], g[0]))
+    goals = {pos: _race_goals(state, pos, cnt, mine, enemies)[:3] for pos, cnt in groups}
+    plans: List[Plan] = []
+    seen: Set[Tuple[Move, ...]] = set()
+
+    def turn(choice: Dict[Pos, Pos], skip: Set[Pos], forbidden: Set[Pos]) -> List[Move]:
+        out = []
+        for pos, cnt in groups:
+            if pos in skip or pos not in choice:
+                continue
+            dst = _race_step(state, side, pos, cnt, choice[pos], forbidden, enemies)
+            if dst is not None:
+                out.append((pos[0], pos[1], cnt, dst[0], dst[1]))
+        return out
+
+    def add(moves: List[Move], tag: str):
+        key = tuple(sorted(moves))
+        if moves and key not in seen and check_moves(state.rows, state.cols, mine, key)[0]:
+            seen.add(key)
+            plans.append(Plan(key, 0.0, tag))
+
+    sources = set(mine)
+    default = {pos: g[0][1] for pos, g in goals.items()}
+    add(turn(default, set(), sources), "race:base")
+    humans = list(state.humans.items())
+    for pos, cnt in groups[:2]:                       # whole-group splits to two houses
+        options = []
+        for i, (h1, c1) in enumerate(humans):
+            for h2, c2 in humans[i + 1:]:
+                for (ha, ca), (hb, cb) in (((h1, c1), (h2, c2)), ((h2, c2), (h1, c1))):
+                    if ca <= cnt - cb and cb <= cnt - ca:
+                        options.append(((ca + cb) / (cheb(pos, ha) + cheb(pos, hb) + 1.0), ha, ca, hb))
+        options.sort(key=lambda o: -o[0])
+        for _, ha, ca, hb in options[:2]:
+            dst_a = _race_step(state, side, pos, ca, ha, sources, enemies)
+            if dst_a is None:
+                continue
+            dst_b = _race_step(state, side, pos, cnt - ca, hb, sources | {dst_a}, enemies)
+            if dst_b is None:
+                continue
+            rest = [m for m in turn(default, {pos}, sources) if (m[3], m[4]) not in (pos, dst_a, dst_b)]
+            add([(pos[0], pos[1], ca, dst_a[0], dst_a[1]),
+                 (pos[0], pos[1], cnt - ca, dst_b[0], dst_b[1])] + rest, "race:split")
+    if len(groups) > 1:
+        big = groups[0][0]
+        add(turn({pos: big for pos, _ in groups[1:]}, {big}, sources), "race:regroup")
+    for pos, g in goals.items():
+        if len(g) > 1:
+            choice = dict(default)
+            choice[pos] = g[1][1]
+            add(turn(choice, set(), sources), "race:alt")
+    return plans[:max_plans]

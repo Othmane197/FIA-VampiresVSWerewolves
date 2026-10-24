@@ -1,6 +1,6 @@
 # 04 · Evaluation: [splitter/evaluate.py](../../splitter/evaluate.py)
 
-[`evaluate(state, side, to_move, remaining_plies)`](../../splitter/evaluate.py#L169) returns an
+[`evaluate(state, side, to_move, remaining_plies)`](../../splitter/evaluate.py#L170) returns an
 estimate of **P(side wins)** in [0, 1]. MCTS uses it at the end of every rollout (chapter 05). The
 agent also uses it at the root, to decide whether we are behind and gambles become allowed
 (chapter 06).
@@ -12,7 +12,7 @@ It is computed in four stages.
 - One side has no creatures: 0 or 1 (0.5 if both are gone).
 - No plies left: compare totals, the server's rule (1, 0.5 or 0).
 
-## 4.1 Immediate tactics: [`resolve_immediate`](../../splitter/evaluate.py#L43)
+## 4.1 Immediate tactics: [`resolve_immediate`](../../splitter/evaluate.py#L44)
 
 The player to move takes its **certain** gains first. Biggest group first, each group takes the
 best of:
@@ -21,7 +21,7 @@ best of:
 
 Without this, a position where we are about to be eaten would look fine.
 
-## 4.2 Race projection: [`project_race`](../../splitter/evaluate.py#L67)
+## 4.2 Race projection: [`project_race`](../../splitter/evaluate.py#L68)
 
 This is the heart of the evaluation, and the reason splitting is valued correctly.
 
@@ -32,7 +32,7 @@ clock 0 and the other at 0.5 (a half-move head start). Then, repeatedly:
 2. **Merge-aware.** Also consider two runners of the same side meeting first (half their distance), then taking a house that **neither could take alone**.
    - This was added after a lost game where we had 19 creatures split 12 + 7, and the opponent took an 18-house prize.
    - Without merge-awareness the projection said "nobody can take the prize", so regrouping looked useless.
-3. **Contest-aware: [`_contest`](../../splitter/evaluate.py#L121).** If an enemy runner can reach the house right after the capture:
+3. **Contest-aware: [`_contest`](../../splitter/evaluate.py#L122).** If an enemy runner can reach the house right after the capture:
    - with ≥ 1.5× our new size → the capture is **not counted**;
    - with ≥ our new size (it strikes at ≥ 50%) → it **counts half**.
    - This was added after losses where small groups raced into the enemy's zone and only fed it.
@@ -46,7 +46,7 @@ contested.
 **Snowballing is modelled too.** A runner that converts becomes bigger and can then take bigger
 houses.
 
-## 4.3 Exposure: [`exposure`](../../splitter/evaluate.py#L140)
+## 4.3 Exposure: [`exposure`](../../splitter/evaluate.py#L141)
 
 Each projected total loses the expected creatures that the enemy can take next turn. For each of
 our groups we keep the worst threat:
@@ -58,7 +58,7 @@ our groups we keep the worst threat:
 
 This is what punishes splits that are too thin, and stepping next to an equal enemy group.
 
-## 4.4 From margin to probability: inside [`evaluate`](../../splitter/evaluate.py#L169)
+## 4.4 From margin to probability: inside [`evaluate`](../../splitter/evaluate.py#L170)
 
 ```
 a, b  = projected totals (us, them) minus exposure, floored at 0.1
@@ -75,9 +75,9 @@ uncertain. This fixed a lost game where we gave up a safe late lead by stepping 
 
 ## 4.5 Helper
 
-[`material_balance`](../../splitter/evaluate.py#L218): (our total − theirs) / everything. The agent
+[`material_balance`](../../splitter/evaluate.py#L219): (our total − theirs) / everything. The agent
 uses it to switch on gambles in the last 20 plies when behind
-([`SplitterAgent._choose`](../../splitter/agent.py#L150)).
+([`SplitterAgent._choose`](../../splitter/agent.py#L169)).
 
 ## 4.6 Tunable constants and the backup's calibrated evaluation
 

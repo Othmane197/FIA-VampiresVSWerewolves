@@ -22,12 +22,12 @@ Chapters 01–08 explain *why*; this page answers *where*.
 | Name | Kind | Line | Purpose (first docstring line) |
 |---|---|---|---|
 | `AIAgent` | class | [22](../../ai_agent.py#L22) | The tournament bot: "The Splitter" (splitter/agent.py, MCTS over joint plans with safe |
-| `AIAgent.__init__` | method | [32](../../ai_agent.py#L32) | Create the Splitter engine (time budget from SPLITTER_TIME) and the starter fallback. |
-| `AIAgent.reset` | method | [48](../../ai_agent.py#L48) | Forget the previous game (called by main.py on END). |
-| `AIAgent.compute_moves` | method | [53](../../ai_agent.py#L53) | Splitter's moves for this turn; the starter strategy if the Splitter fails. |
-| `StarterAgent` | class | [65](../../ai_agent.py#L65) | The original starter-kit strategy (walk to the nearest target). Kept as fallback/baseline. |
-| `StarterAgent.__init__` | method | [68](../../ai_agent.py#L68) | Original starter-kit agent (kept as last-resort fallback and as a baseline opponent). |
-| `StarterAgent.compute_moves` | method | [72](../../ai_agent.py#L72) | Computes the list of moves for the current turn. |
+| `AIAgent.__init__` | method | [33](../../ai_agent.py#L33) | Create the Splitter engine (time budget from SPLITTER_TIME) and the starter fallback. |
+| `AIAgent.reset` | method | [49](../../ai_agent.py#L49) | Forget the previous game (called by main.py on END). |
+| `AIAgent.compute_moves` | method | [54](../../ai_agent.py#L54) | Splitter's moves for this turn; the starter strategy if the Splitter fails. |
+| `StarterAgent` | class | [66](../../ai_agent.py#L66) | The original starter-kit strategy (walk to the nearest target). Kept as fallback/baseline. |
+| `StarterAgent.__init__` | method | [69](../../ai_agent.py#L69) | Original starter-kit agent (kept as last-resort fallback and as a baseline opponent). |
+| `StarterAgent.compute_moves` | method | [73](../../ai_agent.py#L73) | Computes the list of moves for the current turn. |
 
 ### [network.py](../../network.py)
 
@@ -108,27 +108,34 @@ Chapters 01–08 explain *why*; this page answers *where*.
 
 | Name | Kind | Line | Purpose (first docstring line) |
 |---|---|---|---|
-| `PlanConfig` | class | [31](../../splitter/planner.py#L31) | Every tunable of the plan generator (the bot's variants are just different PlanConfigs). |
-| `Goal` | class | [51](../../splitter/planner.py#L51) | One candidate objective for one group: a target cell, a kind and an estimated value. |
-| `Plan` | class | [61](../../splitter/planner.py#L61) | A joint plan = one full turn (moves of all our groups), with its prior score and a tag. |
-| `_step_dir` | function | [72](../../splitter/planner.py#L72) | -1, 0 or +1: the direction of one king step from coordinate a towards b. |
-| `straight_path` | function | [77](../../splitter/planner.py#L77) | Cells visited by a king walking diagonally first, then straight (excludes src). |
-| `enemy_attack_loss` | function | [88](../../splitter/planner.py#L88) | Expected creatures we lose if we stand on `cell` with `count` and the best adjacent enemy |
-| `race_won` | function | [102](../../splitter/planner.py#L102) | Do we reach `target` (a house needing `need`) no later than any enemy group that can take it? |
-| `detachment_safe` | function | [112](../../splitter/planner.py#L112) | Can a detachment of k creatures walk from src to the house `target` (h humans, k >= h), |
-| `safe_step` | function | [140](../../splitter/planner.py#L140) | Best neighbour of src to walk `count` creatures towards `goal`: |
-| `border_distance` | function | [189](../../splitter/planner.py#L189) | Number of cells between p and the nearest edge of the board (0 = on the edge). |
-| `flee_cell` | function | [194](../../splitter/planner.py#L194) | Where to run: far from the threats FIRST, but into open space (a king chased along an edge or |
-| `candidate_goals` | function | [217](../../splitter/planner.py#L217) | Ranked goals for one group (best first). `committed` = the goal this group had last turn. |
-| `_Builder` | class | [294](../../splitter/planner.py#L294) | Turns a set of orders (src, count, goal) into a legal list of moves. |
-| `_Builder.__init__` | method | [297](../../splitter/planner.py#L297) | One builder per generate_plans call: its caches are only valid for this state. |
-| `_Builder.build` | method | [306](../../splitter/planner.py#L306) | -> (moves, intents). Orders whose goal is their own cell mean 'stay'. |
-| `_orders_value` | function | [333](../../splitter/planner.py#L333) | Prior score of a plan = sum of the values of the goals its orders pursue. |
-| `generate_plans` | function | [338](../../splitter/planner.py#L338) | The short list of joint plans for `side` to move. Never empty while `side` has creatures. |
-| `_split_orders` | function | [456](../../splitter/planner.py#L456) | Yield (orders, tag, bonus) for plans where the group at `pos` sends detachments. |
-| `_pincer_orders` | function | [524](../../splitter/planner.py#L524) | Yield (orders, tag) converging groups on the best house that only their sum can convert. |
-| `fallback_plan` | function | [562](../../splitter/planner.py#L562) | A plain legal move: the biggest group steps to its least dangerous empty/friendly neighbour. |
-| `quick_plan` | function | [582](../../splitter/planner.py#L582) | Cheap greedy policy for rollouts: take what is adjacent, else walk to the best target. |
+| `PlanConfig` | class | [32](../../splitter/planner.py#L32) | Every tunable of the plan generator (the bot's variants are just different PlanConfigs). |
+| `Goal` | class | [59](../../splitter/planner.py#L59) | One candidate objective for one group: a target cell, a kind and an estimated value. |
+| `Plan` | class | [69](../../splitter/planner.py#L69) | A joint plan = one full turn (moves of all our groups), with its prior score and a tag. |
+| `_step_dir` | function | [80](../../splitter/planner.py#L80) | -1, 0 or +1: the direction of one king step from coordinate a towards b. |
+| `straight_path` | function | [85](../../splitter/planner.py#L85) | Cells visited by a king walking diagonally first, then straight (excludes src). |
+| `enemy_attack_loss` | function | [96](../../splitter/planner.py#L96) | Expected creatures we lose if we stand on `cell` with `count` and the best adjacent enemy |
+| `bait_factor` | function | [110](../../splitter/planner.py#L110) | bait_check option: after a sure kill on `cell` our `count` creatures stand there. Another enemy |
+| `race_won` | function | [125](../../splitter/planner.py#L125) | Do we reach `target` (a house needing `need`) no later than any enemy group that can take it? |
+| `detachment_safe` | function | [135](../../splitter/planner.py#L135) | Can a detachment of k creatures walk from src to the house `target` (h humans, k >= h), |
+| `safe_step` | function | [163](../../splitter/planner.py#L163) | Best neighbour of src to walk `count` creatures towards `goal`: |
+| `border_distance` | function | [212](../../splitter/planner.py#L212) | Number of cells between p and the nearest edge of the board (0 = on the edge). |
+| `flee_cell` | function | [217](../../splitter/planner.py#L217) | Where to run: far from the threats FIRST, but into open space (a king chased along an edge or |
+| `candidate_goals` | function | [240](../../splitter/planner.py#L240) | Ranked goals for one group (best first). `committed` = the goal this group had last turn. |
+| `_Builder` | class | [320](../../splitter/planner.py#L320) | Turns a set of orders (src, count, goal) into a legal list of moves. |
+| `_Builder.__init__` | method | [323](../../splitter/planner.py#L323) | One builder per generate_plans call: its caches are only valid for this state. |
+| `_Builder.build` | method | [332](../../splitter/planner.py#L332) | -> (moves, intents). Orders whose goal is their own cell mean 'stay'. |
+| `_orders_value` | function | [359](../../splitter/planner.py#L359) | Prior score of a plan = sum of the values of the goals its orders pursue. |
+| `generate_plans` | function | [364](../../splitter/planner.py#L364) | The short list of joint plans for `side` to move. Never empty while `side` has creatures. |
+| `_split_orders` | function | [496](../../splitter/planner.py#L496) | Yield (orders, tag, bonus) for plans where the group at `pos` sends detachments. |
+| `_pincer_orders` | function | [564](../../splitter/planner.py#L564) | Yield (orders, tag) converging groups on the best house that only their sum can convert. |
+| `fallback_plan` | function | [602](../../splitter/planner.py#L602) | A plain legal move: the biggest group steps to its least dangerous empty/friendly neighbour. |
+| `quick_plan` | function | [622](../../splitter/planner.py#L622) | Cheap greedy policy for rollouts: take what is adjacent, else walk to the best target. |
+| `_race_goals` | function | [662](../../splitter/planner.py#L662) | RaceMCTS's goal list for one group, best first: convert, sure kill, regroup, flee, chase. |
+| `_race_step` | function | [688](../../splitter/planner.py#L688) | One step towards goal: least danger from sure-killers, then closest; never into a fight we cannot win for sure. |
+| `race_rollout_plan` | function | [714](../../splitter/planner.py#L714) | Splitter-R rollout policy (RaceMCTS's, on our rules): every group takes its best goal, its |
+| `_offer` | function | [778](../../splitter/planner.py#L778) | Keep the best two (value, cell) in top = [v1, cell1, v2, cell2]; a tie keeps the earlier one. |
+| `_race_step_fast` | function | [786](../../splitter/planner.py#L786) | _race_step for rollouts: our own cells are the forbidden sources, `killers` = enemies >= 1.5 cnt. |
+| `race_plans` | function | [813](../../splitter/planner.py#L813) | Splitter-R root plans (RaceMCTS's plan families, on our rules): every group to its best goal, |
 
 ## Splitter: evaluation
 
@@ -137,12 +144,12 @@ Chapters 01–08 explain *why*; this page answers *where*.
 | Name | Kind | Line | Purpose (first docstring line) |
 |---|---|---|---|
 | `EvalParams` | class | [29](../../splitter/evaluate.py#L29) | The evaluation's tunable constants. Defaults = the flagship. The backup "Splitter-Calibrated" |
-| `resolve_immediate` | function | [43](../../splitter/evaluate.py#L43) | Groups after the player to move takes its certain gains (kills >= 1.5x, conversions). |
-| `project_race` | function | [67](../../splitter/evaluate.py#L67) | Projected sizes after both sides collect the houses they reach first (see module doc). |
-| `_contest` | function | [121](../../splitter/evaluate.py#L121) | Is the capture of house hp by runner r (ending with size_after at time t) safe? |
-| `exposure` | function | [140](../../splitter/evaluate.py#L140) | Expected creatures lost because enemies can attack these groups soon. |
-| `evaluate` | function | [169](../../splitter/evaluate.py#L169) | P(side wins) estimate in [0, 1]; `ev` = the evaluation constants (see EvalParams). |
-| `material_balance` | function | [218](../../splitter/evaluate.py#L218) | Quick (our total - their total) / everything, used to decide whether we are behind. |
+| `resolve_immediate` | function | [44](../../splitter/evaluate.py#L44) | Groups after the player to move takes its certain gains (kills >= 1.5x, conversions). |
+| `project_race` | function | [68](../../splitter/evaluate.py#L68) | Projected sizes after both sides collect the houses they reach first (see module doc). |
+| `_contest` | function | [122](../../splitter/evaluate.py#L122) | Is the capture of house hp by runner r (ending with size_after at time t) safe? |
+| `exposure` | function | [141](../../splitter/evaluate.py#L141) | Expected creatures lost because enemies can attack these groups soon. |
+| `evaluate` | function | [170](../../splitter/evaluate.py#L170) | P(side wins) estimate in [0, 1]; `ev` = the evaluation constants (see EvalParams). |
+| `material_balance` | function | [219](../../splitter/evaluate.py#L219) | Quick (our total - their total) / everything, used to decide whether we are behind. |
 
 ## Splitter: search
 
@@ -150,16 +157,21 @@ Chapters 01–08 explain *why*; this page answers *where*.
 
 | Name | Kind | Line | Purpose (first docstring line) |
 |---|---|---|---|
-| `Node` | class | [26](../../splitter/mcts.py#L26) | One node of the open-loop tree: the plan that leads to it, statistics, children. |
-| `Node.__init__` | method | [31](../../splitter/mcts.py#L31) | New node reached by `mover` playing `plan`; prior = the plan's normalized prior. |
-| `MCTS` | class | [43](../../splitter/mcts.py#L43) | Monte Carlo Tree Search over joint plans (see the module docstring). |
-| `MCTS.__init__` | method | [46](../../splitter/mcts.py#L46) | Configure exploration, rollouts, widening, the plan configs of both sides and the evaluation. |
-| `MCTS._plans` | method | [66](../../splitter/mcts.py#L66) | Plans for `side` at a tree node (opponent: gambles allowed), priors normalized to [0, 1]. |
-| `MCTS._select` | method | [76](../../splitter/mcts.py#L76) | UCT + progressive bias. Only called on a node that has children. |
-| `MCTS._widen_limit` | method | [92](../../splitter/mcts.py#L92) | Progressive widening: how many children a node with `visits` visits may have. |
-| `MCTS.search` | method | [97](../../splitter/mcts.py#L97) | Run iterations until the deadline and return the most visited root plan. |
-| `MCTS._iterate` | method | [122](../../splitter/mcts.py#L122) | One iteration: select / expand by replaying plans with fresh dice, roll out, evaluate, back up. |
-| `MCTS.root_stats` | method | [177](../../splitter/mcts.py#L177) | [(visits, mean value, tag, moves)] of the root's children, most visited first. |
+| `Node` | class | [33](../../splitter/mcts.py#L33) | One node of the open-loop tree: the plan that leads to it, statistics, children. |
+| `Node.__init__` | method | [38](../../splitter/mcts.py#L38) | New node reached by `mover` playing `plan`; prior = the plan's normalized prior. |
+| `MCTS` | class | [50](../../splitter/mcts.py#L50) | Monte Carlo Tree Search over joint plans (see the module docstring). |
+| `MCTS.__init__` | method | [53](../../splitter/mcts.py#L53) | Configure exploration, rollouts, widening, the plan configs of both sides and the evaluation. |
+| `MCTS._plans` | method | [90](../../splitter/mcts.py#L90) | Plans for `side` at a tree node (opponent: gambles allowed), priors normalized to [0, 1]. |
+| `MCTS._evaluate` | method | [109](../../splitter/mcts.py#L109) | evaluate(), memoized within one search when plan_cache is on. |
+| `MCTS._select` | method | [119](../../splitter/mcts.py#L119) | UCT + progressive bias. Only called on a node that has children. |
+| `MCTS._widen_limit` | method | [135](../../splitter/mcts.py#L135) | Progressive widening: how many children a node with `visits` visits may have. |
+| `MCTS.search` | method | [140](../../splitter/mcts.py#L140) | Run iterations until the deadline and return the most visited root plan. |
+| `MCTS._make_root` | method | [188](../../splitter/mcts.py#L188) | A fresh root, or the reused subtree with its children matched to today's root plans. |
+| `MCTS.subtree_after` | method | [209](../../splitter/mcts.py#L209) | Tree reuse: last turn's node for our played plan followed by the opponent reply that turns |
+| `MCTS._iterate` | method | [231](../../splitter/mcts.py#L231) | One iteration: select / expand by replaying plans with fresh dice, roll out, evaluate, back up. |
+| `MCTS.root_stats` | method | [301](../../splitter/mcts.py#L301) | [(visits, mean value, tag, moves)] of the root's children, most visited first. |
+| `_with_race_replies` | function | [311](../../splitter/mcts.py#L311) | opp_race option: the opponent's first reply also considers RaceMCTS-style aggressive plans |
+| `in_contact` | function | [324](../../splitter/mcts.py#L324) | Tactics decide: no humans are left, or two opposing groups are within `radius` moves. |
 
 ## Splitter: agent and safety net
 
@@ -167,16 +179,16 @@ Chapters 01–08 explain *why*; this page answers *where*.
 
 | Name | Kind | Line | Purpose (first docstring line) |
 |---|---|---|---|
-| `SplitterAgent` | class | [41](../../splitter/agent.py#L41) | The tournament bot: planner + MCTS under a strict time budget, with a legal-move guarantee. |
-| `SplitterAgent.__init__` | method | [44](../../splitter/agent.py#L44) | Build the plan config (variants via keyword arguments), the evaluation and the MCTS engine. |
-| `SplitterAgent.reset` | method | [75](../../splitter/agent.py#L75) | Call between games (main.py does it on END). |
-| `SplitterAgent.compute_moves` | method | [82](../../splitter/agent.py#L82) | main.py interface: moves for the GameState kept from the server messages. |
-| `SplitterAgent.compute_moves_board` | method | [97](../../splitter/agent.py#L97) | Othmane's / Ronita's interface: moves for a BoardState and a Species. |
-| `SplitterAgent.choose` | method | [104](../../splitter/agent.py#L104) | Arena interface: moves for a splitter State (fastest, true ply known). |
-| `SplitterAgent._remaining_plies` | method | [113](../../splitter/agent.py#L113) | Plies left, from the ply cap and from the game clock (whichever ends first). |
-| `SplitterAgent._safe_choose` | method | [123](../../splitter/agent.py#L123) | Never-fail wrapper: search, then validate, then fallbacks; always returns legal moves. |
-| `SplitterAgent._choose` | method | [150](../../splitter/agent.py#L150) | Decide: evaluate, generate plans (with last turn's intents), search, remember intents. |
-| `_emergency_move` | function | [184](../../splitter/agent.py#L184) | Last resort: any legal one-step move of the biggest group to a non-hostile cell. |
+| `SplitterAgent` | class | [46](../../splitter/agent.py#L46) | The tournament bot: planner + MCTS under a strict time budget, with a legal-move guarantee. |
+| `SplitterAgent.__init__` | method | [49](../../splitter/agent.py#L49) | Build the plan config (variants via keyword arguments), the evaluation and the MCTS engine. |
+| `SplitterAgent.reset` | method | [89](../../splitter/agent.py#L89) | Call between games (main.py does it on END). |
+| `SplitterAgent.compute_moves` | method | [98](../../splitter/agent.py#L98) | main.py interface: moves for the GameState kept from the server messages. |
+| `SplitterAgent.compute_moves_board` | method | [113](../../splitter/agent.py#L113) | Othmane's / Ronita's interface: moves for a BoardState and a Species. |
+| `SplitterAgent.choose` | method | [120](../../splitter/agent.py#L120) | Arena interface: moves for a splitter State (fastest, true ply known). |
+| `SplitterAgent._remaining_plies` | method | [129](../../splitter/agent.py#L129) | Plies left, from the ply cap and from the game clock (whichever ends first). |
+| `SplitterAgent._safe_choose` | method | [139](../../splitter/agent.py#L139) | Never-fail wrapper: search, then validate, then fallbacks; always returns legal moves. |
+| `SplitterAgent._choose` | method | [169](../../splitter/agent.py#L169) | Decide: evaluate, generate plans (with last turn's intents), search, remember intents. |
+| `_emergency_move` | function | [228](../../splitter/agent.py#L228) | Last resort: any legal one-step move of the biggest group to a non-hostile cell. |
 
 ## Arena (benchmarking)
 
@@ -188,39 +200,39 @@ Chapters 01–08 explain *why*; this page answers *where*.
 | `write_xml` | function | [43](../../arena/maps.py#L43) | Save a State as a server map file, so the real GUI can load it. |
 | `_cheb` | function | [58](../../arena/maps.py#L58) | King-move distance (local copy, keeps this module independent). |
 | `symmetric_map` | function | [63](../../arena/maps.py#L63) | Random point-symmetric map: mirrored starts and mirrored houses of equal size. |
-| `build_suite` | function | [138](../../arena/maps.py#L138) | name: 'all' (the 14 tuning maps), 'given', a family name ('holdout' = validation only), |
-| `render` | function | [165](../../arena/maps.py#L165) | ASCII board: V12 / W7 / H4, '.' empty. |
+| `build_suite` | function | [149](../../arena/maps.py#L149) | name: 'all' (the 14 tuning maps), 'given', a family name ('holdout' = validation only, |
+| `render` | function | [176](../../arena/maps.py#L176) | ASCII board: V12 / W7 / H4, '.' empty. |
 
 ### [arena/opponents.py](../../arena/opponents.py)
 
 | Name | Kind | Line | Purpose (first docstring line) |
 |---|---|---|---|
-| `_species` | function | [47](../../arena/opponents.py#L47) | V / W -> game_state.Species. |
-| `load_vendor` | function | [52](../../arena/opponents.py#L52) | Import `modules` from arena/vendor/<branch> without clashing with the repo's modules. |
-| `Bot` | class | [76](../../arena/opponents.py#L76) | Common interface of every arena bot: reset() and play(state, side) -> moves. |
-| `Bot.reset` | method | [80](../../arena/opponents.py#L80) | Prepare for a new game. |
-| `Bot.play` | method | [83](../../arena/opponents.py#L83) | Moves for `side` in `state` (implemented by the adapters). |
-| `GameStateBot` | class | [88](../../arena/opponents.py#L88) | Adapter for agents with compute_moves(GameState) (repo starter, Dana's bots, AIAgent). |
-| `GameStateBot.__init__` | method | [90](../../arena/opponents.py#L90) | Wrap an agent factory; a fresh agent is built for every game. |
-| `GameStateBot.reset` | method | [97](../../arena/opponents.py#L97) | Fresh agent instance for a new game. |
-| `GameStateBot.play` | method | [102](../../arena/opponents.py#L102) | Convert the State to a GameState and ask the agent. |
-| `BoardBot` | class | [110](../../arena/opponents.py#L110) | Adapter for agents with compute_moves(BoardState, Species) (Othmane's and Ronita's bots). |
-| `BoardBot.__init__` | method | [112](../../arena/opponents.py#L112) | Wrap an agent factory; a fresh agent is built for every game. |
-| `BoardBot.reset` | method | [118](../../arena/opponents.py#L118) | Fresh agent instance for a new game. |
-| `BoardBot.play` | method | [122](../../arena/opponents.py#L122) | Convert the State to a BoardState and ask the agent. |
-| `SplitterBot` | class | [127](../../arena/opponents.py#L127) | Our bot through its fast choose(State, side) interface. |
-| `SplitterBot.__init__` | method | [129](../../arena/opponents.py#L129) | SplitterAgent with the given keyword arguments (game clock disabled in the arena). |
-| `SplitterBot.reset` | method | [136](../../arena/opponents.py#L136) | Forget the previous game. |
-| `SplitterBot.play` | method | [140](../../arena/opponents.py#L140) | Moves chosen by the SplitterAgent. |
-| `_parse_value` | function | [145](../../arena/opponents.py#L145) | '3' -> 3, '0.5' -> 0.5, 'true' -> True, else the string (for 'Splitter:key=value'). |
-| `_registry` | function | [156](../../arena/opponents.py#L156) | name -> builder(time_limit) for every non-Splitter bot (teammates' bots are loaded lazily). |
-| `_models` | function | [213](../../arena/opponents.py#L213) | The two kept models, named for the arena (defined once, in splitter/agent.py). |
-| `styled_config` | function | [222](../../arena/opponents.py#L222) | Opponent style number n (deterministic): random risk taking, splitting, caution, search depth. |
-| `bot_names` | function | [251](../../arena/opponents.py#L251) | Every bot name make_bot() accepts. |
-| `SnapshotBot` | class | [256](../../arena/opponents.py#L256) | A frozen copy of splitter/ (arena/snapshots/splitter_<version>), see arena/snapshot.py. |
-| `SnapshotBot.__init__` | method | [259](../../arena/opponents.py#L259) | SplitterAgent imported from arena/snapshots/splitter_<version>/. |
-| `load_external` | function | [267](../../arena/opponents.py#L267) | 'py:<path>[:ClassName]' -> a Bot around an external Python agent class. Without ClassName the |
-| `make_bot` | function | [310](../../arena/opponents.py#L310) | spec: registry name, Splitter variant, 'Splitter:k=v,..', 'Snap:<version>[:k=v,..]' or 'py:<file>[:Class]'. |
+| `_species` | function | [50](../../arena/opponents.py#L50) | V / W -> game_state.Species. |
+| `load_vendor` | function | [55](../../arena/opponents.py#L55) | Import `modules` from arena/vendor/<branch> without clashing with the repo's modules. |
+| `Bot` | class | [79](../../arena/opponents.py#L79) | Common interface of every arena bot: reset() and play(state, side) -> moves. |
+| `Bot.reset` | method | [83](../../arena/opponents.py#L83) | Prepare for a new game. |
+| `Bot.play` | method | [86](../../arena/opponents.py#L86) | Moves for `side` in `state` (implemented by the adapters). |
+| `GameStateBot` | class | [91](../../arena/opponents.py#L91) | Adapter for agents with compute_moves(GameState) (repo starter, Dana's bots, AIAgent). |
+| `GameStateBot.__init__` | method | [93](../../arena/opponents.py#L93) | Wrap an agent factory; a fresh agent is built for every game. |
+| `GameStateBot.reset` | method | [100](../../arena/opponents.py#L100) | Fresh agent instance for a new game. |
+| `GameStateBot.play` | method | [105](../../arena/opponents.py#L105) | Convert the State to a GameState and ask the agent. |
+| `BoardBot` | class | [113](../../arena/opponents.py#L113) | Adapter for agents with compute_moves(BoardState, Species) (Othmane's and Ronita's bots). |
+| `BoardBot.__init__` | method | [115](../../arena/opponents.py#L115) | Wrap an agent factory; a fresh agent is built for every game. |
+| `BoardBot.reset` | method | [121](../../arena/opponents.py#L121) | Fresh agent instance for a new game. |
+| `BoardBot.play` | method | [125](../../arena/opponents.py#L125) | Convert the State to a BoardState and ask the agent. |
+| `SplitterBot` | class | [130](../../arena/opponents.py#L130) | Our bot through its fast choose(State, side) interface. |
+| `SplitterBot.__init__` | method | [132](../../arena/opponents.py#L132) | SplitterAgent with the given keyword arguments (game clock disabled in the arena). |
+| `SplitterBot.reset` | method | [139](../../arena/opponents.py#L139) | Forget the previous game. |
+| `SplitterBot.play` | method | [143](../../arena/opponents.py#L143) | Moves chosen by the SplitterAgent. |
+| `_parse_value` | function | [148](../../arena/opponents.py#L148) | '3' -> 3, '0.5' -> 0.5, 'true' -> True, else the string (for 'Splitter:key=value'). |
+| `_registry` | function | [159](../../arena/opponents.py#L159) | name -> builder(time_limit) for every non-Splitter bot (teammates' bots are loaded lazily). |
+| `_models` | function | [233](../../arena/opponents.py#L233) | The two kept models, named for the arena (defined once, in splitter/agent.py). |
+| `styled_config` | function | [243](../../arena/opponents.py#L243) | Opponent style number n (deterministic): random risk taking, splitting, caution, search depth. |
+| `bot_names` | function | [272](../../arena/opponents.py#L272) | Every bot name make_bot() accepts. |
+| `SnapshotBot` | class | [277](../../arena/opponents.py#L277) | A frozen copy of splitter/ (arena/snapshots/splitter_<version>), see arena/snapshot.py. |
+| `SnapshotBot.__init__` | method | [280](../../arena/opponents.py#L280) | SplitterAgent imported from arena/snapshots/splitter_<version>/. |
+| `load_external` | function | [288](../../arena/opponents.py#L288) | 'py:<path>[:ClassName]' -> a Bot around an external Python agent class. Without ClassName the |
+| `make_bot` | function | [331](../../arena/opponents.py#L331) | spec: registry name, Splitter variant, 'Splitter:k=v,..', 'Snap:<version>[:k=v,..]' or 'py:<file>[:Class]'. |
 
 ### [arena/referee.py](../../arena/referee.py)
 
@@ -293,15 +305,15 @@ Chapters 01–08 explain *why*; this page answers *where*.
 
 | Name | Kind | Line | Purpose (first docstring line) |
 |---|---|---|---|
-| `update_teammates` | function | [81](../../tools/teammate_matches.py#L81) | Bring arena/vendor/ up to date with the teammates' latest pushes (unless --no-update) and return |
-| `version_label` | function | [112](../../tools/teammate_matches.py#L112) | 'Othmane@214dbb0 (2026-10-15 14:27)' for a teammate's bot, 'in-repo' for our own bots. |
-| `check_loads` | function | [119](../../tools/teammate_matches.py#L119) | Build the bot once in a fresh process (like tools/play_bot.py does). -> (ok, error message). |
-| `load_map` | function | [135](../../tools/teammate_matches.py#L135) | An .xml map file (relative to the repo) or a map name of arena/maps.py. |
-| `schedule` | function | [142](../../tools/teammate_matches.py#L142) | Game g (0-based): every map as Vampires (we connect first), then every map as Werewolves. |
-| `play_game` | function | [147](../../tools/teammate_matches.py#L147) | One full game over the protocol: fake server + main.py + the teammate's bot. Returns one row. |
-| `summarize` | function | [201](../../tools/teammate_matches.py#L201) | Per-opponent table (markdown) of the finished games, the versions played, the unavailable bots. |
-| `store_history` | function | [241](../../tools/teammate_matches.py#L241) | One line per opponent in arena/results/history.csv (same file as the arena and server matches). |
-| `main` | function | [262](../../tools/teammate_matches.py#L262) | Command line: update the teammates' bots, play every (opponent, game), record, summarize. |
+| `update_teammates` | function | [85](../../tools/teammate_matches.py#L85) | Bring arena/vendor/ up to date with the teammates' latest pushes (unless --no-update) and return |
+| `version_label` | function | [116](../../tools/teammate_matches.py#L116) | 'Othmane@214dbb0 (2026-10-15 14:27)' for a teammate's bot, 'in-repo' for our own bots. |
+| `check_loads` | function | [123](../../tools/teammate_matches.py#L123) | Build the bot once in a fresh process (like tools/play_bot.py does). -> (ok, error message). |
+| `load_map` | function | [139](../../tools/teammate_matches.py#L139) | An .xml map file (relative to the repo) or a map name of arena/maps.py. |
+| `schedule` | function | [146](../../tools/teammate_matches.py#L146) | Game g (0-based): every map as Vampires (we connect first), then every map as Werewolves. |
+| `play_game` | function | [151](../../tools/teammate_matches.py#L151) | One full game over the protocol: fake server + main.py + the teammate's bot. Returns one row. |
+| `summarize` | function | [205](../../tools/teammate_matches.py#L205) | Per-opponent table (markdown) of the finished games, the versions played, the unavailable bots. |
+| `store_history` | function | [245](../../tools/teammate_matches.py#L245) | One line per opponent in arena/results/history.csv (same file as the arena and server matches). |
+| `main` | function | [266](../../tools/teammate_matches.py#L266) | Command line: update the teammates' bots, play every (opponent, game), record, summarize. |
 
 ### [tools/server_match.py](../../tools/server_match.py)
 
@@ -391,11 +403,17 @@ Chapters 01–08 explain *why*; this page answers *where*.
 | `TestLegality` | class | [25](../../tests/test_planner.py#L25) |  |
 | `TestLegality.test_fuzz_all_plans_legal` | method | [26](../../tests/test_planner.py#L26) |  |
 | `TestLegality.test_safe_step_never_walks_into_bigger_humans` | method | [48](../../tests/test_planner.py#L48) |  |
-| `TestSplits` | class | [55](../../tests/test_planner.py#L55) |  |
-| `TestSplits.test_split_generated_for_two_small_houses` | method | [56](../../tests/test_planner.py#L56) |  |
-| `TestSplits.test_no_split_when_disabled` | method | [66](../../tests/test_planner.py#L66) |  |
-| `TestSplits.test_detachment_safety` | method | [74](../../tests/test_planner.py#L74) |  |
-| `TestSplits.test_unsafe_house_not_split_to` | method | [83](../../tests/test_planner.py#L83) |  |
+| `TestSplitterR` | class | [55](../../tests/test_planner.py#L55) |  |
+| `TestSplitterR.test_race_rollouts_and_root_plans_are_legal` | method | [56](../../tests/test_planner.py#L56) |  |
+| `TestSplitterR.test_fast_race_rollouts_match_the_reference` | method | [75](../../tests/test_planner.py#L75) |  |
+| `TestSplitterR.test_bait_check_refuses_the_trap` | method | [112](../../tests/test_planner.py#L112) |  |
+| `TestSplitterR.test_strike_plan_offered_when_not_behind` | method | [122](../../tests/test_planner.py#L122) |  |
+| `TestSplitterR.test_trusted_plans_are_still_legal` | method | [141](../../tests/test_planner.py#L141) |  |
+| `TestSplits` | class | [152](../../tests/test_planner.py#L152) |  |
+| `TestSplits.test_split_generated_for_two_small_houses` | method | [153](../../tests/test_planner.py#L153) |  |
+| `TestSplits.test_no_split_when_disabled` | method | [163](../../tests/test_planner.py#L163) |  |
+| `TestSplits.test_detachment_safety` | method | [171](../../tests/test_planner.py#L171) |  |
+| `TestSplits.test_unsafe_house_not_split_to` | method | [180](../../tests/test_planner.py#L180) |  |
 
 ### [tests/test_agent.py](../../tests/test_agent.py)
 
@@ -406,14 +424,17 @@ Chapters 01–08 explain *why*; this page answers *where*.
 | `TestPuzzles.test_takes_the_sure_kill` | method | [21](../../tests/test_agent.py#L21) |  |
 | `TestPuzzles.test_does_not_suicide_or_wait_next_to_a_killer` | method | [27](../../tests/test_agent.py#L27) |  |
 | `TestPuzzles.test_splits_to_take_two_adjacent_houses` | method | [36](../../tests/test_agent.py#L36) |  |
-| `TestPuzzles.test_converges_two_groups_on_a_big_house` | method | [44](../../tests/test_agent.py#L44) |  |
-| `TestSafety` | class | [54](../../tests/test_agent.py#L54) |  |
-| `TestSafety.test_time_budget_big_map` | method | [55](../../tests/test_agent.py#L55) |  |
-| `TestSafety.test_fuzz_never_illegal` | method | [63](../../tests/test_agent.py#L63) |  |
-| `TestSafety.test_backup_model_never_illegal` | method | [79](../../tests/test_agent.py#L79) |  |
-| `TestSafety.test_tournament_client_selects_the_model` | method | [97](../../tests/test_agent.py#L97) |  |
-| `TestSafety.test_watchdog_sends_the_fallback_when_late` | method | [115](../../tests/test_agent.py#L115) |  |
-| `TestSafety.test_gamestate_interface` | method | [137](../../tests/test_agent.py#L137) |  |
+| `TestPuzzles.test_does_not_offer_a_desperate_opponent_a_shot` | method | [44](../../tests/test_agent.py#L44) |  |
+| `TestPuzzles.test_converges_two_groups_on_a_big_house` | method | [52](../../tests/test_agent.py#L52) |  |
+| `TestSafety` | class | [62](../../tests/test_agent.py#L62) |  |
+| `TestSafety.test_time_budget_big_map` | method | [63](../../tests/test_agent.py#L63) |  |
+| `TestSafety.test_fuzz_never_illegal` | method | [71](../../tests/test_agent.py#L71) |  |
+| `TestSafety.test_backup_model_never_illegal` | method | [87](../../tests/test_agent.py#L87) |  |
+| `TestSafety.test_splitter_r_options_never_illegal` | method | [105](../../tests/test_agent.py#L105) |  |
+| `TestSafety.test_tree_reuse_and_cache_find_their_targets` | method | [124](../../tests/test_agent.py#L124) |  |
+| `TestSafety.test_tournament_client_selects_the_model` | method | [137](../../tests/test_agent.py#L137) |  |
+| `TestSafety.test_watchdog_sends_the_fallback_when_late` | method | [155](../../tests/test_agent.py#L155) |  |
+| `TestSafety.test_gamestate_interface` | method | [177](../../tests/test_agent.py#L177) |  |
 
 ### [tests/test_protocol.py](../../tests/test_protocol.py)
 

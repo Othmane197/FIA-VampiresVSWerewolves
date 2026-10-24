@@ -8,20 +8,20 @@ The PDF requires an AI that anticipates the opponent's moves. We use **MCTS**, b
 
 ## 5.1 Tree and nodes
 
-- **[`Node`](../../splitter/mcts.py#L26)** stores:
+- **[`Node`](../../splitter/mcts.py#L33)** stores:
   - the plan that leads to it, and which side played it;
   - visits and the sum of rewards (always from the **root** side's point of view);
   - the plan's normalized prior;
   - the list of plans not yet expanded.
 - **Turns alternate:** root = our turn, children = our plans, grandchildren = the opponent's replies, and so on.
-- **Plans at a node come from [`MCTS._plans`](../../splitter/mcts.py#L66):**
+- **Plans at a node come from [`MCTS._plans`](../../splitter/mcts.py#L90):**
   - *our side:* the agent's `PlanConfig` (`inner_cfg`);
   - *the opponent:* a config with `gamble="always"` and at most 12 plans. We assume it strikes first whenever adjacent with P ≥ 0.3, because real opponents do (chapter 04).
   - Priors are normalized to [0, 1] by the best sibling.
 
-## 5.2 One iteration: [`MCTS._iterate`](../../splitter/mcts.py#L122)
+## 5.2 One iteration: [`MCTS._iterate`](../../splitter/mcts.py#L231)
 
-1. **Selection.** From the root, repeatedly pick a child with [`MCTS._select`](../../splitter/mcts.py#L76):
+1. **Selection.** From the root, repeatedly pick a child with [`MCTS._select`](../../splitter/mcts.py#L119):
    ```
    score = Q + c·√(ln N / n) + prior_bias · prior / (1 + n)
    ```
@@ -32,13 +32,13 @@ The PDF requires an AI that anticipates the opponent's moves. We use **MCTS**, b
 2. **Open-loop replay.** Nodes do not store boards. Each iteration re-applies the plans from the root with [`State.apply`](../../splitter/state.py#L96) and **fresh dice**, so chance is averaged over iterations. If a stored plan has become illegal in this sampled future (a group died in a battle), the descent stops there ([`check_moves`](../../splitter/rules.py#L91)).
 3. **Expansion with progressive widening.**
    - The plan to expand is first checked with `check_moves` in *this* sampled future: plans are generated once per node, but open-loop replays can reach the node with different dice. Without this check an illegal plan raised inside `State.apply`, the whole search for the turn was lost, and the fallback move was played. That was the case on 4.1% of v5's turns; the fix is worth +2.2 points (chapter 11.8).
-   - A node may have at most k(N) = 2·√(N+1) children ([`MCTS._widen_limit`](../../splitter/mcts.py#L92)), so new plans are added in prior order as the node gets visited.
+   - A node may have at most k(N) = 2·√(N+1) children ([`MCTS._widen_limit`](../../splitter/mcts.py#L135)), so new plans are added in prior order as the node gets visited.
    - The root is fully expanded: every root plan is tried at least once.
-4. **Rollout.** 2 plies of the greedy [`quick_plan`](../../splitter/planner.py#L582).
-5. **Evaluation.** [`evaluate`](../../splitter/evaluate.py#L169) at the leaf, with the remaining plies reduced by the depth reached.
+4. **Rollout.** 2 plies of the greedy [`quick_plan`](../../splitter/planner.py#L622).
+5. **Evaluation.** [`evaluate`](../../splitter/evaluate.py#L170) at the leaf, with the remaining plies reduced by the depth reached.
 6. **Backpropagation.** Visits + 1 and reward added along the path.
 
-## 5.3 The decision: [`MCTS.search`](../../splitter/mcts.py#L97)
+## 5.3 The decision: [`MCTS.search`](../../splitter/mcts.py#L140)
 
 - **The root plans are given by the agent,** with the commitment intents applied.
 - **It iterates until the deadline,** then returns the **most visited** root plan (ties broken by mean value).
@@ -47,7 +47,7 @@ The PDF requires an AI that anticipates the opponent's moves. We use **MCTS**, b
   - a single plan → returned immediately, with no search;
   - if the budget runs out before the first iteration finishes, the planner's best plan is returned.
 
-[`MCTS.root_stats`](../../splitter/mcts.py#L177) lists visits, value and tag for every root plan.
+[`MCTS.root_stats`](../../splitter/mcts.py#L301) lists visits, value and tag for every root plan.
 It is printed when the bot runs with `SPLITTER_VERBOSE=1`.
 
 ## 5.4 Speed

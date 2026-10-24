@@ -24,11 +24,11 @@ The binary protocol itself is the starter's [network.py](../../network.py) and
 ## 6.2 [ai_agent.py](../../ai_agent.py)
 
 - **[`AIAgent`](../../ai_agent.py#L22)** is what `main.py` instantiates.
-  - It builds a [`SplitterAgent`](../../splitter/agent.py#L41) with `SPLITTER_TIME` seconds per move (default 1.5).
+  - It builds a [`SplitterAgent`](../../splitter/agent.py#L46) with `SPLITTER_TIME` seconds per move (default 1.5).
   - **`SPLITTER_MODEL`** chooses the model: `flagship` (default) or `backup` (6.5).
   - `SPLITTER_VERBOSE=1` prints the search statistics.
   - If the `splitter` package cannot even be imported (for example a missing file on the CTI machine), it falls back to the starter strategy.
-- **[`AIAgent.compute_moves`](../../ai_agent.py#L53)** calls the Splitter and falls back to [`StarterAgent`](../../ai_agent.py#L65), the original starter-kit logic, on any error.
+- **[`AIAgent.compute_moves`](../../ai_agent.py#L54)** calls the Splitter and falls back to [`StarterAgent`](../../ai_agent.py#L66), the original starter-kit logic, on any error.
 
 ## 6.3 [splitter/agent.py](../../splitter/agent.py): `SplitterAgent`
 
@@ -36,27 +36,27 @@ The binary protocol itself is the starter's [network.py](../../network.py) and
 
 | Method | Used by |
 |---|---|
-| [`compute_moves(game_state)`](../../splitter/agent.py#L82) | `main.py` / `AIAgent`, Dana's self-play |
-| [`compute_moves_board(board, species)`](../../splitter/agent.py#L97) | Othmane's and Ronita's arenas |
-| [`choose(state, side, ply)`](../../splitter/agent.py#L104) | Our arena (fast path, true ply known) |
+| [`compute_moves(game_state)`](../../splitter/agent.py#L98) | `main.py` / `AIAgent`, Dana's self-play |
+| [`compute_moves_board(board, species)`](../../splitter/agent.py#L113) | Othmane's and Ronita's arenas |
+| [`choose(state, side, ply)`](../../splitter/agent.py#L120) | Our arena (fast path, true ply known) |
 
-**The decision: [`_choose`](../../splitter/agent.py#L150).**
+**The decision: [`_choose`](../../splitter/agent.py#L169).**
 
-1. **Plies left** = [`_remaining_plies`](../../splitter/agent.py#L113).
+1. **Plies left** = [`_remaining_plies`](../../splitter/agent.py#L129).
    - The server never tells us the ply, so `compute_moves` estimates it as 2 × our turn counter.
    - After 10 plies it also projects the plies left from the game clock (`game_seconds` = 300, i.e. 5 minutes), because the clock can end the game before the 200-ply cap when both bots use most of their 2 s. (In the arena the clock rarely bound, chapter 14.3, stage E.)
-2. **Behind?** We are behind if `evaluate(...)` < 0.35, or if in the last 20 plies our material is below theirs ([`material_balance`](../../splitter/evaluate.py#L218)). Only then are gamble plans generated (`gamble="adaptive"`).
-3. **Root plans** = [`generate_plans`](../../splitter/planner.py#L338) with **last turn's intents.** Only intents of groups still standing where we left them are kept (commitment, chapter 03).
+2. **Behind?** We are behind if `evaluate(...)` < 0.35, or if in the last 20 plies our material is below theirs ([`material_balance`](../../splitter/evaluate.py#L219)). Only then are gamble plans generated (`gamble="adaptive"`).
+3. **Root plans** = [`generate_plans`](../../splitter/planner.py#L364) with **last turn's intents.** Only intents of groups still standing where we left them are kept (commitment, chapter 03).
 4. **Search.**
    - `search="greedy"`, or only one plan: play the top plan.
-   - Otherwise [`MCTS.search`](../../splitter/mcts.py#L97) with the **remaining budget**: `time_limit` − time already used − 20 ms.
+   - Otherwise [`MCTS.search`](../../splitter/mcts.py#L140) with the **remaining budget**: `time_limit` − time already used − 20 ms.
 5. **Remember intents.** The chosen plan's intents are stored for next turn.
 
-**The safety net: [`_safe_choose`](../../splitter/agent.py#L123).**
+**The safety net: [`_safe_choose`](../../splitter/agent.py#L139).**
 
 1. Run `_choose` inside try/except.
 2. Validate the result with [`check_moves`](../../splitter/rules.py#L91), the server's cheating rules plus bounds and the 255 cap.
-3. If invalid or empty: [`fallback_plan`](../../splitter/planner.py#L562), then [`_emergency_move`](../../splitter/agent.py#L184).
+3. If invalid or empty: [`fallback_plan`](../../splitter/planner.py#L602), then [`_emergency_move`](../../splitter/agent.py#L228).
 4. Convert every value to a plain `int` 5-tuple, ready for `struct.pack`.
 5. The reason for any rejection is kept in `last_error` (the tests assert it stays `None`).
 
@@ -79,7 +79,7 @@ produce a run identical to the baseline. The arena builds variants from strings 
 
 ## 6.5 The two models: flagship and backup
 
-Both are defined once, in [`MODELS`](../../splitter/agent.py#L35) (splitter/agent.py), and used by
+Both are defined once, in [`MODELS`](../../splitter/agent.py#L36) (splitter/agent.py), and used by
 the tournament client (`SPLITTER_MODEL`) and the arena (names `Splitter`, `Splitter-Calibrated`):
 
 | Model | Options | Tournament command | Why |

@@ -11,15 +11,22 @@ Monte Carlo Tree Search over joint plans (planner.generate_plans), for the Split
     Progressive widening: a node only considers its k(N) best plans, k growing with visits.
   * Leaf: a short greedy rollout (planner.quick_plan) then evaluate.evaluate (a win probability).
   * The root's most visited plan is played.
+  * Splitter-R options (campaign 3, off by default): RaceMCTS-style stochastic rollouts with first
+    strikes (rollout_policy="race", rollout_strike), deeper rollouts only in contact or in the
+    endgame (rollout_depth_contact), leaf values mixed before / after the rollout (leaf_mix), a
+    transposition cache of plans and evaluations inside one search (plan_cache), tree reuse
+    between turns (search(reuse=...), found by subtree_after), and RaceMCTS-style aggressive
+    replies for the opponent's first move (opp_race).
 """
 import math
 import random
 import time
-from typing import List, Optional
+from dataclasses import replace
+from typing import Dict, List, Optional, Tuple
 
 from .evaluate import DEFAULT_EVAL, EvalParams, evaluate
-from .planner import Plan, PlanConfig, generate_plans, quick_plan
-from .rules import check_moves, other
+from .planner import Plan, PlanConfig, generate_plans, quick_plan, race_plans, race_rollout_plan
+from .rules import cheb, check_moves, other
 from .state import State
 
 
@@ -46,7 +53,9 @@ class MCTS:
     def __init__(self, cfg: Optional[PlanConfig] = None, c: float = 0.6, prior_bias: float = 0.6,
                  rollout_depth: int = 2, widen_k: float = 2.0, widen_alpha: float = 0.5,
                  opponent_cfg: Optional[PlanConfig] = None, rng: Optional[random.Random] = None,
-                 ev: EvalParams = DEFAULT_EVAL):
+                 ev: EvalParams = DEFAULT_EVAL, rollout_policy: str = "quick", rollout_strike: float = 0.0,
+                 rollout_depth_contact: int = 0, leaf_mix: float = 1.0, contact_radius: int = 3,
+                 plan_cache: bool = False, opp_race: bool = False):
         """Configure exploration, rollouts, widening, the plan configs of both sides and the evaluation."""
         self.cfg = cfg or PlanConfig()
         # the modelled opponent may strike whenever adjacent (real bots do, see exposure())
@@ -59,19 +68,53 @@ class MCTS:
         self.widen_alpha = widen_alpha
         self.rng = rng or random.Random()
         self.ev = ev                                # evaluation constants (the backup is calibrated)
+        self.rollout_policy = rollout_policy        # "quick" (flagship) | "race" (Splitter-R)
+        self.rollout_strike = rollout_strike        # race rollouts: strike first from these odds (0 = never)
+        self.rollout_depth_contact = rollout_depth_contact   # depth in contact / endgame (0 = rollout_depth)
+        self.leaf_mix = leaf_mix                    # reward = (1 - mix) * value before + mix * value after rollout
+        self.contact_radius = contact_radius
+        self.plan_cache = plan_cache                # memoize plans and leaf values within one search
+        self.opp_race = opp_race                    # opponent's first reply: + RaceMCTS-style aggressive plans
+        self._cfg_us, self._cfg_opp = self.cfg, self.opp_cfg     # this search's configs (see search)
+        self._ev = ev
+        self._opp_strike = rollout_strike           # the opponent's strike odds in race rollouts
+        self.cache_hits = 0
+        self.root_key: Optional[tuple] = None
+        self._deadline = 0.0
+        self._plans_cache: Dict[tuple, List[Plan]] = {}
+        self._eval_cache: Dict[tuple, float] = {}
         self.iterations = 0
         self.root: Optional[Node] = None
 
     # ------------------------------------------------------------------ helpers
     def _plans(self, state: State, side: int, root_side: int, behind: bool) -> List[Plan]:
         """Plans for `side` at a tree node (opponent: gambles allowed), priors normalized to [0, 1]."""
-        cfg = self.cfg if side == root_side else self.opp_cfg
+        key = None
+        if self.plan_cache:                     # open-loop replays reach the same board often
+            key = (state.key(), side, behind)
+            hit = self._plans_cache.get(key)
+            if hit is not None:
+                self.cache_hits += 1
+                return list(hit)
+        cfg = self._cfg_us if side == root_side else self._cfg_opp
         plans = generate_plans(state, side, cfg, behind=behind if side == root_side else False)
         if plans:
             top = max(p.prior for p in plans) or 1.0
             for p in plans:
                 p.prior = max(0.0, p.prior / top) if top > 0 else 0.0
+        if key is not None:
+            self._plans_cache[key] = list(plans)
         return plans
+
+    def _evaluate(self, state: State, root_side: int, to_move: int, remaining: float) -> float:
+        """evaluate(), memoized within one search when plan_cache is on."""
+        if not self.plan_cache:
+            return evaluate(state, root_side, to_move, remaining, ev=self._ev)
+        key = (state.key(), to_move, int(remaining))
+        v = self._eval_cache.get(key)
+        if v is None:
+            v = self._eval_cache[key] = evaluate(state, root_side, to_move, remaining, ev=self._ev)
+        return v
 
     def _select(self, node: Node, root_side: int) -> Node:
         """UCT + progressive bias. Only called on a node that has children."""
@@ -95,22 +138,44 @@ class MCTS:
 
     # ------------------------------------------------------------------ search
     def search(self, state: State, side: int, time_limit: float, remaining_plies: float,
-               behind: bool = False, root_plans: Optional[List[Plan]] = None) -> Optional[Plan]:
-        """Run iterations until the deadline and return the most visited root plan."""
+               behind: bool = False, root_plans: Optional[List[Plan]] = None,
+               reuse: Optional[Node] = None, cfg_us: Optional[PlanConfig] = None,
+               opp_gamble_p: Optional[float] = None) -> Optional[Plan]:
+        """
+        Run iterations until the deadline and return the most visited root plan.
+        `reuse` = last turn's subtree for the position reached (tree reuse): the statistics of the
+        root plans that are generated again today are kept.
+        `cfg_us` / `opp_gamble_p` (desperate_p option): this search's plan config for us, and the
+        odds from which the modelled opponent gambles (in its plans and in race rollouts).
+        """
         start = time.perf_counter()
         deadline = start + time_limit
-        root = Node(None, None, None)
-        root.untried = root_plans if root_plans is not None else self._plans(state, side, side, behind)
+        self._cfg_us = cfg_us or self.cfg
+        self._cfg_opp = self.opp_cfg
+        self._opp_strike = self.rollout_strike
+        self._ev = self.ev
+        if opp_gamble_p is not None:
+            self._cfg_opp = replace(self.opp_cfg, gamble_p=opp_gamble_p)
+            self._ev = replace(self.ev, opp_strike_p=min(self.ev.opp_strike_p, opp_gamble_p))
+            if self.rollout_strike > 0.0:
+                self._opp_strike = min(self.rollout_strike, opp_gamble_p)
+        self._plans_cache.clear()
+        self._eval_cache.clear()
+        self.cache_hits = 0
+        self.root_key = (state.key(), side)     # the position this tree is about (tree reuse guard)
+        self._deadline = deadline               # race rollouts stop here (one long rollout cannot overrun)
+        plans = root_plans if root_plans is not None else self._plans(state, side, side, behind)
+        root = self._make_root(plans, reuse)
         self.root = root
         self.iterations = 0
-        if not root.untried:
+        if not plans:
             return None
-        if len(root.untried) == 1:
-            return root.untried[0]
+        if len(plans) == 1:
+            return plans[0]
         rng = self.rng
         # every root plan gets expanded (root is fully widened: progressive widening below it)
-        root_limit = len(root.untried)
-        first = root.untried[0]
+        root_limit = len(plans)
+        first = plans[0]
         while time.perf_counter() < deadline:
             self._iterate(root, state, side, remaining_plies, behind, rng, root_limit)
             self.iterations += 1
@@ -118,6 +183,50 @@ class MCTS:
             return first
         best = max(root.children, key=lambda ch: (ch.visits, ch.value / max(ch.visits, 1)))
         return best.plan
+
+    @staticmethod
+    def _make_root(plans: List[Plan], reuse: Optional[Node]) -> Node:
+        """A fresh root, or the reused subtree with its children matched to today's root plans."""
+        if reuse is None:
+            root = Node(None, None, None)
+            root.untried = list(plans)
+            return root
+        root = reuse
+        root.parent, root.plan, root.mover = None, None, None
+        fresh = {p.moves: p for p in plans}
+        kept = []
+        for ch in root.children:
+            p = fresh.pop(ch.plan.moves, None) if ch.plan is not None else None
+            if p is not None:                  # same moves: keep the statistics, refresh the plan
+                ch.plan, ch.prior = p, p.prior
+                kept.append(ch)
+        root.children = kept
+        root.untried = [p for p in plans if p.moves in fresh]
+        root.visits = sum(ch.visits for ch in kept)
+        root.value = sum(ch.value for ch in kept)
+        return root
+
+    def subtree_after(self, before: State, side: int, our_moves: Tuple, now: State) -> Optional[Node]:
+        """
+        Tree reuse: last turn's node for our played plan followed by the opponent reply that turns
+        the board we left into the board we see now (replayed without dice: a random battle on the
+        way means no exact match, and a fresh tree).
+        """
+        if self.root is None or self.root_key != (before.key(), side):
+            return None                        # the last search was about another position
+        ours = next((ch for ch in self.root.children
+                     if ch.plan is not None and ch.plan.moves == our_moves), None)
+        if ours is None or not check_moves(before.rows, before.cols, before.groups[side], our_moves)[0]:
+            return None
+        mid = before.apply(side, our_moves, mode="mean")
+        target = now.key()
+        opp = other(side)
+        for ch in ours.children:
+            if ch.plan is None or not check_moves(mid.rows, mid.cols, mid.groups[opp], ch.plan.moves)[0]:
+                continue
+            if mid.apply(opp, ch.plan.moves, mode="mean").key() == target:
+                return ch
+        return None
 
     def _iterate(self, root: Node, state: State, root_side: int, remaining: float, behind: bool,
                  rng, root_limit: int):
@@ -130,6 +239,8 @@ class MCTS:
                 break
             if node.untried is None:
                 node.untried = self._plans(state, to_move, root_side, behind)
+                if self.opp_race and node.parent is root:
+                    node.untried = _with_race_replies(node.untried, state, to_move)
             limit = root_limit if node is root else self._widen_limit(node.visits)
             if node.untried and len(node.children) < limit:
                 plan = node.untried.pop(0)
@@ -159,16 +270,29 @@ class MCTS:
             to_move = other(to_move)
             depth += 1
         # rollout
-        for _ in range(self.rollout_depth):
-            if state.is_terminal():
+        steps = self.rollout_depth
+        if self.rollout_depth_contact and in_contact(state, self.contact_radius):
+            steps = self.rollout_depth_contact
+        before = None
+        if self.leaf_mix < 1.0:
+            before = self._evaluate(state, root_side, to_move, remaining - depth)
+        race = self.rollout_policy == "race"
+        for _ in range(steps):
+            if state.is_terminal() or (race and time.perf_counter() > self._deadline):
                 break
-            moves = quick_plan(state, to_move)
+            if race:
+                strike = self.rollout_strike if to_move == root_side else self._opp_strike
+                moves = race_rollout_plan(state, to_move, rng, 0.15, strike)
+            else:
+                moves = quick_plan(state, to_move)
             if not moves:
                 break
             state = state.apply(to_move, moves, rng)
             to_move = other(to_move)
             depth += 1
-        reward = evaluate(state, root_side, to_move, remaining - depth, ev=self.ev)
+        reward = self._evaluate(state, root_side, to_move, remaining - depth)
+        if before is not None:
+            reward = (1.0 - self.leaf_mix) * before + self.leaf_mix * reward
         while node is not None:
             node.visits += 1
             node.value += reward
@@ -182,3 +306,29 @@ class MCTS:
                 for ch in self.root.children if ch.plan is not None]
         rows.sort(key=lambda r: -r[0])
         return rows
+
+
+def _with_race_replies(plans: List[Plan], state: State, side: int) -> List[Plan]:
+    """
+    opp_race option: the opponent's first reply also considers RaceMCTS-style aggressive plans
+    (whole groups to their best goal, unsafe splits), so our move is tested against bolder bots
+    than our own cautious planner. Half the top prior; widening order = prior order.
+    """
+    seen = {p.moves for p in plans}
+    extra = [Plan(p.moves, 0.5, p.tag, p.intents) for p in race_plans(state, side) if p.moves not in seen]
+    if not extra:
+        return plans
+    return sorted(plans + extra, key=lambda p: -p.prior)
+
+
+def in_contact(state: State, radius: int = 3) -> bool:
+    """Tactics decide: no humans are left, or two opposing groups are within `radius` moves."""
+    if not state.humans:
+        return True
+    theirs = state.groups[1]
+    for p in state.groups[0]:
+        for q in theirs:
+            if cheb(p, q) <= radius:
+                return True
+    return False
+

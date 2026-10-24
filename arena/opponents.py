@@ -13,13 +13,16 @@ The team uses two agent interfaces; adapters translate:
 Bots INSIDE the repo:
     "Splitter"            the flagship (splitter.agent.MODELS["flagship"])
     "Splitter-Calibrated" the backup (MODELS["backup"]: evaluation fitted on game outcomes)
+    "Splitter-R"          campaign-3 candidate (MODELS["r"]: flagship + RaceMCTS rollouts and root plans)
     "Splitter:k=v,..."    any variant inline, e.g. "Splitter:splits=0" (the deathball ablation),
                           "Splitter:gamble=always,c=0.9" (an aggressive style), "Splitter:c=0.8"
     "Snap:<version>[:k=v,..]"  a frozen copy of splitter/ (arena/snapshot.py)
     "Styled:<n>"          a reproducible random opponent STYLE (styled_config): a third validation
                           set against over-fitting to the teammates' bots (chapter 14)
     teammates' bots       Apex, RaceMCTS, Expecti, Grabber, ... loaded from arena/vendor/<branch>/
-                          (run `python -m arena.fetch_opponents`)
+                          (run `python -m arena.fetch_opponents --fetch`)
+    teammates' LIVE bots  Apex-live, RaceMCTS-live, Expecti-live: their tournament entry points with
+                          their own presets and time budgets (Othmane's "champion" Apex, Dana's SafeAgent)
 Bots OUTSIDE the repo:
     "py:<path/to/bot.py>[:ClassName]"   any Python class with compute_moves(GameState) or
                           compute_moves(BoardState, Species) (detected automatically)
@@ -189,6 +192,20 @@ def _registry() -> Dict[str, Callable[[float], Bot]]:
         from ai_agent import AIAgent
         return GameStateBot("AIAgent", lambda: AIAgent("AIAgent", time_limit=t, game_seconds=None))
 
+    # The teammates' LIVE tournament entry points, exactly as their main.py / server client builds
+    # them, with their own time budgets (the arena's time limit does not apply to them).
+    def apex_live(_t):
+        (ai,) = load_vendor("Othmane", ["ai_agent"])       # "champion" preset: Voronoi + quiescence, 1.65 s
+        return GameStateBot("Apex-live", lambda: ai.AIAgent("Apex-live"))
+
+    def race_live(_t):
+        (ai,) = load_vendor("Ronita", ["ai_agent"])        # MCTSAgent, 1.6 s
+        return GameStateBot("RaceMCTS-live", lambda: ai.AIAgent("RaceMCTS-live"))
+
+    def expecti_live(_t):
+        (sa,) = load_vendor("Dana", ["safe_agent"])        # SafeAgent around SearchAgent, depth 2, 1.2 s
+        return GameStateBot("Expecti-live", lambda: sa.SafeAgent("Expecti-live"))
+
     return {
         "Starter": starter,
         "AIAgent": aiagent,                 # our full tournament path (GameState interface)
@@ -204,6 +221,9 @@ def _registry() -> Dict[str, Callable[[float], Bot]]:
         "ShallowMinimax": othmane("ShallowMinimaxAgent"),
         "MonteCarlo": othmane("MonteCarloAgent"),
         "TacticalSplitter": othmane("TacticalSplitterAgent"),
+        "Apex-live": apex_live,
+        "RaceMCTS-live": race_live,
+        "Expecti-live": expecti_live,
     }
 
 
@@ -213,7 +233,8 @@ PANEL = ["Apex", "RaceMCTS", "Expecti", "TacticalSplitter", "Grabber", "Rusher",
 def _models():
     """The two kept models, named for the arena (defined once, in splitter/agent.py)."""
     from splitter.agent import MODELS
-    return {"Splitter": dict(MODELS["flagship"]), "Splitter-Calibrated": dict(MODELS["backup"])}
+    return {"Splitter": dict(MODELS["flagship"]), "Splitter-Calibrated": dict(MODELS["backup"]),
+            "Splitter-R": dict(MODELS["r"])}
 
 
 VARIANTS = _models()

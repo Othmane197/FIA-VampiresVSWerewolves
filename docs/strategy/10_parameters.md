@@ -8,14 +8,14 @@ raises `TypeError`.
 Δ values marked **(A)** come from the screening in chapter 12 (paired, tuning set, 0.1 s): only
 large or replicated differences mean anything there.
 
-## 10.0 The two kept models ([`MODELS`](../../splitter/agent.py#L35))
+## 10.0 The two kept models ([`MODELS`](../../splitter/agent.py#L36))
 
 | Name | Settings | Evidence |
 |---|---|---|
 | **Splitter** (flagship) | all defaults below | 79.3% vs the 9-opponent panel (504 games, 0.2 s); 78.7% at 1.5 s; 61.6% head-to-head vs v5 |
 | **Splitter-Calibrated** (backup) | `eval_discount=0.845, eval_k0=8.5, eval_k1=27` | +5.9 ± 4.4 (unseen, 0.25 s); +1.3 ± 6.1 pooled at 1.5 s (chapter 14) |
 
-## 10.1 Plan generator: [`PlanConfig`](../../splitter/planner.py#L31)
+## 10.1 Plan generator: [`PlanConfig`](../../splitter/planner.py#L32)
 
 | Parameter | Value | Meaning | Evidence |
 |---|---|---|---|
@@ -35,8 +35,8 @@ large or replicated differences mean anything there.
 | `hunt_bonus` | 0.1 | Prior bonus of the `hunt` plan | — |
 
 **Constants in [planner.py](../../splitter/planner.py):**
-- [`GAMMA`](../../splitter/planner.py#L26) = 0.9: distance discount of goal values.
-- [`PROTECTED`](../../splitter/planner.py#L27): the plan tags never truncated.
+- [`GAMMA`](../../splitter/planner.py#L27) = 0.9: distance discount of goal values.
+- [`PROTECTED`](../../splitter/planner.py#L28): the plan tags never truncated.
 
 ## 10.2 Evaluation: [evaluate.py](../../splitter/evaluate.py)
 
@@ -50,7 +50,7 @@ large or replicated differences mean anything there.
 | Sigmoid steepness k = `k0` + `k1`·progress | 6 + 14·progress: 6 → 20 (backup **8.5 + 27·progress**: 8.5 → 35.5) | `evaluate` |
 | Domination bonus | score → 0.5·score + 0.5 if a ≥ 1.5·b | `evaluate` |
 
-## 10.3 Search: [`MCTS`](../../splitter/mcts.py#L43)
+## 10.3 Search: [`MCTS`](../../splitter/mcts.py#L50)
 
 | Parameter | Value | Meaning | Evidence |
 |---|---|---|---|
@@ -74,8 +74,29 @@ large or replicated differences mean anything there.
 | `seed` | None | Random seed of the search (set in tests) |
 | `verbose` | False (env `SPLITTER_VERBOSE=1`) | Print the root statistics every turn |
 
-Tournament-client environment: `SPLITTER_TIME` (1.5), `SPLITTER_MODEL` (`flagship` / `backup`),
+Tournament-client environment: `SPLITTER_TIME` (1.5), `SPLITTER_MODEL` (`flagship` / `backup` / `r`),
 `SPLITTER_WATCHDOG` (1.8 s: fallback move if the agent is later than that), `SPLITTER_VERBOSE`.
+
+## 10.4b Campaign 3 options (Splitter-R, under test, chapter 16)
+
+All off by default: the flagship and the backup do not use them. `MODELS["r"]` (`Splitter-R`)
+turns on the first six.
+
+| Parameter | Default (Splitter-R) | Where | Meaning |
+|---|---|---|---|
+| `rollout_policy` | "quick" ("race") | `MCTS` | RaceMCTS's stochastic goal policy in rollouts, on our exact rules |
+| `rollout_strike` | 0.0 (0.45) | `MCTS` | In race rollouts, strike first from these odds (both sides) |
+| `rollout_depth_contact` | 0 (6) | `MCTS` | Rollout depth when opposing groups are within `contact_radius` = 3 cells or no humans are left |
+| `leaf_mix` | 1.0 (0.5) | `MCTS` | Leaf value = (1 − mix) · before the rollout + mix · after |
+| `race_root` | False (True) | agent | RaceMCTS-style plans added at the root, at half the top prior |
+| `bait_check` | False (True) | `PlanConfig` | Discount kills whose victim cell sits next to another strong enemy |
+| `strike_p` | 0.0 | `PlanConfig` | "strike" plans against adjacent enemies beaten with these odds, even when not behind (iteration 2) |
+| `opp_race` | False | `MCTS` | The opponent's first reply also considers RaceMCTS-style aggressive plans (iteration 2) |
+| `desperate_p` | 0.0 | agent | When the opponent is losing (our value ≥ 0.65), it is expected to strike from these odds: sets the four thresholds below for that decision (iteration 3) |
+| `gamble_p` | 0.3 | `PlanConfig` | Gamble goals from these odds (the modelled opponent's: `desperate_p`) |
+| `threat_p` | 0.3 | `PlanConfig` | An enemy within 2 cells that strikes with these odds is a threat to flee from |
+| `eval_opp_strike_p` | 0.3 | `EvalParams` | Exposure: the opponent strikes us from these odds |
+| `trust_plans`, `plan_cache`, `reuse` | False | `PlanConfig`, `MCTS`, agent | The "speed half": no measurable gain at 1.5 s (16.4), kept off |
 
 ## 10.5 Removed parameters (measured, then deleted from the code)
 

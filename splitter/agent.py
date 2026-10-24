@@ -21,11 +21,12 @@ can also be passed (e.g. danger_strike_p=0.3), and evaluation constants as eval_
 """
 import random
 import time
+from dataclasses import replace
 from typing import List, Optional, Tuple
 
 from .evaluate import EvalParams, evaluate, material_balance
 from .mcts import MCTS
-from .planner import PlanConfig, fallback_plan, generate_plans
+from .planner import PlanConfig, fallback_plan, generate_plans, race_plans
 from .rules import V, W, check_moves
 from .state import State, side_of_species
 
@@ -35,6 +36,10 @@ Move = Tuple[int, int, int, int, int]
 MODELS = {
     "flagship": {},
     "backup": {"eval_discount": 0.845, "eval_k0": 8.5, "eval_k1": 27.0},
+    # candidate under validation (campaign 3, chapter 16): the flagship merged with RaceMCTS's
+    # long dice-driven rollouts and root plans, plus the anti-bait kill check
+    "r": {"rollout_policy": "race", "rollout_strike": 0.45, "rollout_depth_contact": 6, "leaf_mix": 0.5,
+          "race_root": True, "bait_check": True},
 }
 
 
@@ -46,6 +51,9 @@ class SplitterAgent:
                  rollout_depth: int = 2, prior_bias: float = 0.6, widen_k: float = 2.0,
                  safety_margin: int = 1, max_detachments: int = 3, reserve_ratio: float = 1.0,
                  reserve_radius: int = 6, max_ply: int = 200, game_seconds: Optional[float] = 300.0,
+                 rollout_policy: str = "quick", rollout_strike: float = 0.0, rollout_depth_contact: int = 0,
+                 leaf_mix: float = 1.0, race_root: bool = False, plan_cache: bool = False,
+                 reuse: bool = False, opp_race: bool = False, desperate_p: float = 0.0,
                  seed: Optional[int] = None, verbose: bool = False, **extra):
         """Build the plan config (variants via keyword arguments), the evaluation and the MCTS engine."""
         self.name = name
@@ -66,8 +74,14 @@ class SplitterAgent:
             else:
                 raise TypeError(f"unknown Splitter option {k!r}")
         self.ev = EvalParams(**ev)
+        self.race_root = race_root             # Splitter-R: RaceMCTS-style plans added at the root
+        self.reuse = reuse                     # Splitter-R: keep last turn's subtree when it matches
+        self.desperate_p = desperate_p         # > 0: a losing opponent is expected to strike from these odds
         self.mcts = MCTS(self.cfg, c=c, rollout_depth=rollout_depth, prior_bias=prior_bias,
-                         widen_k=widen_k, rng=random.Random(seed), ev=self.ev)
+                         widen_k=widen_k, rng=random.Random(seed), ev=self.ev,
+                         rollout_policy=rollout_policy, rollout_strike=rollout_strike,
+                         rollout_depth_contact=rollout_depth_contact, leaf_mix=leaf_mix,
+                         plan_cache=plan_cache, opp_race=opp_race)
         self.last_error: Optional[str] = None
         self.last_info: dict = {}
         self.reset()
@@ -77,6 +91,8 @@ class SplitterAgent:
         self.turns = 0
         self.first_call: Optional[float] = None
         self.intents = {}                      # {cell: goal} of the plan we played last turn
+        self.last_decision = None              # (board, side, moves played) for tree reuse
+        self.reuse_tries = self.reuse_hits = 0
 
     # ------------------------------------------------------------------ interfaces
     def compute_moves(self, game_state) -> List[Move]:
@@ -145,18 +161,35 @@ class SplitterAgent:
             except Exception as e:
                 self.last_error = f"{self.last_error} / fallback: {e!r}"
                 moves = _emergency_move(state, side)
-        return [(int(a), int(b), int(c), int(d), int(e)) for a, b, c, d, e in moves]
+        final = [(int(a), int(b), int(c), int(d), int(e)) for a, b, c, d, e in moves]
+        if self.reuse:
+            self.last_decision = (state.copy(), side, tuple(sorted(final)))
+        return final
 
     def _choose(self, state: State, side: int, ply: int, start: float) -> List[Move]:
         """Decide: evaluate, generate plans (with last turn's intents), search, remember intents."""
         remaining = self._remaining_plies(ply, start)
         value_now = evaluate(state, side, side, remaining, ev=self.ev)
         behind = value_now < 0.35 or (remaining < 20 and material_balance(state, side) < 0)
+        cfg, opp_gamble_p = self.cfg, None
+        if self.desperate_p > 0.0 and (value_now >= 0.65 or (remaining < 20 and material_balance(state, side) > 0)):
+            # the opponent is losing: like us when behind, it gambles, and from low odds (a lost
+            # strike costs it nothing, a won one can wipe out our lead): stay out of its reach
+            opp_gamble_p = self.desperate_p
+            cfg = replace(self.cfg, danger_strike_p=min(self.cfg.danger_strike_p, self.desperate_p),
+                          threat_p=min(self.cfg.threat_p, self.desperate_p))
         # keep only intents of groups that still exist where we left them
         intents = {p: t for p, t in self.intents.items() if p in state.groups[side]}
-        plans = generate_plans(state, side, self.cfg, behind=behind, intents=intents)
+        plans = generate_plans(state, side, cfg, behind=behind, intents=intents)
         if not plans:
             return []
+        if self.race_root:                     # aggressive whole-group options; the search judges them
+            seen = {p.moves for p in plans}
+            half = 0.5 * (max(p.prior for p in plans) or 1.0)
+            for p in race_plans(state, side):
+                if p.moves not in seen:
+                    p.prior = half
+                    plans.append(p)
         if self.search_mode == "greedy" or len(plans) == 1:
             best = plans[0]
             self.intents = dict(best.intents)
@@ -169,9 +202,20 @@ class SplitterAgent:
         top = max(p.prior for p in plans) or 1.0
         for p in plans:
             p.prior = max(0.0, p.prior / top) if top > 0 else 0.0
-        best = self.mcts.search(state, side, budget, remaining, behind, root_plans=list(plans)) or plans[0]
+        reuse_node = None
+        if self.reuse and self.last_decision is not None and self.last_decision[1] == side:
+            before, _, played = self.last_decision
+            self.reuse_tries += 1
+            try:
+                reuse_node = self.mcts.subtree_after(before, side, played, state)
+            except Exception as e:             # reuse is an optimization: never let it cost a turn
+                self.last_error = f"tree reuse: {e!r}"
+            self.reuse_hits += reuse_node is not None
+        best = self.mcts.search(state, side, budget, remaining, behind, root_plans=list(plans),
+                                reuse=reuse_node, cfg_us=cfg, opp_gamble_p=opp_gamble_p) or plans[0]
         self.last_info = {"mode": "mcts", "plans": len(plans), "iterations": self.mcts.iterations,
-                          "tag": best.tag, "value": value_now, "behind": behind}
+                          "tag": best.tag, "value": value_now, "behind": behind,
+                          "opp_desperate": opp_gamble_p is not None}
         if self.verbose:
             print(f"[{self.name}] ply {ply} value {value_now:.2f} iters {self.mcts.iterations} "
                   f"-> {best.tag} {best.moves}")
