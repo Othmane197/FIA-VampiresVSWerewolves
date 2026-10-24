@@ -27,6 +27,7 @@ desktop.ini
 
 # Backup files
 *.bak
+*.pdf
 
 # Internal benchmarks & experimental tournament scripts
 *.json
