@@ -56,7 +56,6 @@ class SplitterAgent:
                  reserve_radius: int = 6, max_ply: int = 200, game_seconds: Optional[float] = 300.0,
                  rollout_policy: str = "quick", rollout_strike: float = 0.0, rollout_depth_contact: int = 0,
                  leaf_mix: float = 1.0, race_root: bool = False, desperate_p: float = 0.0,
-                 keep_away: bool = False, race_root_safe: bool = False,
                  seed: Optional[int] = None, verbose: bool = False, **extra):
         """Build the plan config (variants via keyword arguments), the evaluation and the MCTS engine."""
         self.name = name
@@ -78,9 +77,7 @@ class SplitterAgent:
                 raise TypeError(f"unknown Splitter option {k!r}")
         self.ev = EvalParams(**ev)
         self.race_root = race_root             # RaceMCTS-style plans added at the root (the flagship)
-        self.race_root_safe = race_root_safe   # ... whose steps avoid enemies as big as the group, when not behind
         self.desperate_p = desperate_p         # > 0: a losing opponent is expected to strike from these odds
-        self.keep_away = keep_away             # ... and then, with no humans left, we never step into its reach
         self.mcts = MCTS(self.cfg, c=c, rollout_depth=rollout_depth, prior_bias=prior_bias,
                          widen_k=widen_k, rng=random.Random(seed), ev=self.ev,
                          rollout_policy=rollout_policy, rollout_strike=rollout_strike,
@@ -202,8 +199,7 @@ class SplitterAgent:
             # strike costs it nothing, a won one can wipe out our lead): stay out of its reach
             opp_gamble_p = self.desperate_p
             cfg = replace(self.cfg, danger_strike_p=min(self.cfg.danger_strike_p, self.desperate_p),
-                          threat_p=min(self.cfg.threat_p, self.desperate_p),
-                          keep_away_p=self.desperate_p if self.keep_away else 0.0)
+                          threat_p=min(self.cfg.threat_p, self.desperate_p))
         # keep only intents of groups that still exist where we left them
         intents = {p: t for p, t in self.intents.items() if p in state.groups[side]}
         plans = generate_plans(state, side, cfg, behind=behind, intents=intents)
@@ -213,7 +209,7 @@ class SplitterAgent:
         if self.race_root:                     # aggressive whole-group options; the search judges them
             seen = {p.moves for p in plans}
             half = 0.5 * (max(p.prior for p in plans) or 1.0)
-            for p in race_plans(state, side, safe=self.race_root_safe and not behind):
+            for p in race_plans(state, side):
                 if p.moves not in seen:
                     p.prior = half
                     plans.append(p)

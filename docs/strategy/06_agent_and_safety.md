@@ -38,27 +38,27 @@ The binary protocol itself is the starter's [network.py](../../network.py) and
 
 | Method | Used by |
 |---|---|
-| [`compute_moves(game_state)`](../../splitter/agent.py#L101) | `main.py` / `AIAgent`, Dana's self-play |
-| [`compute_moves_board(board, species)`](../../splitter/agent.py#L116) | Othmane's and Ronita's arenas |
-| [`choose(state, side, ply)`](../../splitter/agent.py#L123) | Our arena (fast path, true ply known) |
+| [`compute_moves(game_state)`](../../splitter/agent.py#L98) | `main.py` / `AIAgent`, Dana's self-play |
+| [`compute_moves_board(board, species)`](../../splitter/agent.py#L113) | Othmane's and Ronita's arenas |
+| [`choose(state, side, ply)`](../../splitter/agent.py#L120) | Our arena (fast path, true ply known) |
 
-**The decision: [`_choose`](../../splitter/agent.py#L194).**
+**The decision: [`_choose`](../../splitter/agent.py#L191).**
 
-1. **Plies left** = [`_remaining_plies`](../../splitter/agent.py#L147).
+1. **Plies left** = [`_remaining_plies`](../../splitter/agent.py#L144).
    - The server never tells us the ply, so `compute_moves` estimates it as 2 × our turn counter.
    - After 10 plies it also projects the plies left from the game clock (`game_seconds` = 300, i.e. 5 minutes), because the clock can end the game before the 200-ply cap when both bots use most of their 2 s. (In the arena the clock rarely bound, chapter 14.3, stage E.)
 2. **Behind?** We are behind if `evaluate(...)` < 0.35, or if in the last 20 plies our material is below theirs ([`material_balance`](../../splitter/evaluate.py#L220)). Only then are gamble plans generated (`gamble="adaptive"`).
-3. **Root plans** = [`generate_plans`](../../splitter/planner.py#L381) with **last turn's intents.** Only intents of groups still standing where we left them are kept (commitment, chapter 03).
+3. **Root plans** = [`generate_plans`](../../splitter/planner.py#L363) with **last turn's intents.** Only intents of groups still standing where we left them are kept (commitment, chapter 03).
 4. **Search.**
    - `search="greedy"`, or only one plan: play the top plan.
    - Otherwise [`MCTS.search`](../../splitter/mcts.py#L116) with the **remaining budget**: `time_limit` − time already used − 20 ms.
 5. **Remember intents.** The chosen plan's intents are stored for next turn.
 
-**The safety net: [`_safe_choose`](../../splitter/agent.py#L157).**
+**The safety net: [`_safe_choose`](../../splitter/agent.py#L154).**
 
 1. Run `_choose` inside try/except.
 2. Validate the result with [`check_moves`](../../splitter/rules.py#L91), the server's cheating rules plus bounds and the 255 cap.
-3. If invalid or empty: [`fallback_plan`](../../splitter/planner.py#L618), then [`_emergency_move`](../../splitter/agent.py#L246).
+3. If invalid or empty: [`fallback_plan`](../../splitter/planner.py#L600), then [`_emergency_move`](../../splitter/agent.py#L242).
 4. Convert every value to a plain `int` 5-tuple, ready for `struct.pack`.
 5. The reason for any rejection is kept in `last_error` (the tests assert it stays `None`).
 

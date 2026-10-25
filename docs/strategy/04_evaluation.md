@@ -77,7 +77,7 @@ uncertain. This fixed a lost game where we gave up a safe late lead by stepping 
 
 [`material_balance`](../../splitter/evaluate.py#L220): (our total − theirs) / everything. The agent
 uses it to switch on gambles in the last 20 plies when behind
-([`SplitterAgent._choose`](../../splitter/agent.py#L194)).
+([`SplitterAgent._choose`](../../splitter/agent.py#L191)).
 
 ## 4.6 Tunable constants, and the retired calibrated evaluation
 

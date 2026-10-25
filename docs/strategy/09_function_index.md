@@ -111,34 +111,33 @@ Chapters 01–08 explain *why*; this page answers *where*.
 | Name | Kind | Line | Purpose (first docstring line) |
 |---|---|---|---|
 | `PlanConfig` | class | [32](../../splitter/planner.py#L32) | Every tunable of the plan generator (the bot's variants are just different PlanConfigs). |
-| `Goal` | class | [60](../../splitter/planner.py#L60) | One candidate objective for one group: a target cell, a kind and an estimated value. |
-| `Plan` | class | [70](../../splitter/planner.py#L70) | A joint plan = one full turn (moves of all our groups), with its prior score and a tag. |
-| `_step_dir` | function | [81](../../splitter/planner.py#L81) | -1, 0 or +1: the direction of one king step from coordinate a towards b. |
-| `straight_path` | function | [86](../../splitter/planner.py#L86) | Cells visited by a king walking diagonally first, then straight (excludes src). |
-| `enemy_attack_loss` | function | [97](../../splitter/planner.py#L97) | Expected creatures we lose if we stand on `cell` with `count` and the best adjacent enemy |
-| `bait_factor` | function | [111](../../splitter/planner.py#L111) | bait_check option: after a sure kill on `cell` our `count` creatures stand there. Another enemy |
-| `race_won` | function | [126](../../splitter/planner.py#L126) | Do we reach `target` (a house needing `need`) no later than any enemy group that can take it? |
-| `detachment_safe` | function | [136](../../splitter/planner.py#L136) | Can a detachment of k creatures walk from src to the house `target` (h humans, k >= h), |
-| `safe_step` | function | [164](../../splitter/planner.py#L164) | Best neighbour of src to walk `count` creatures towards `goal`: |
-| `_first_strike_risk` | function | [220](../../splitter/planner.py#L220) | Would an enemy next to `cell` beat `count` creatures standing there with odds >= p_min? |
-| `border_distance` | function | [228](../../splitter/planner.py#L228) | Number of cells between p and the nearest edge of the board (0 = on the edge). |
-| `flee_cell` | function | [233](../../splitter/planner.py#L233) | Where to run: far from the threats FIRST, but into open space (a king chased along an edge or |
-| `candidate_goals` | function | [256](../../splitter/planner.py#L256) | Ranked goals for one group (best first). `committed` = the goal this group had last turn. |
-| `_Builder` | class | [336](../../splitter/planner.py#L336) | Turns a set of orders (src, count, goal) into a legal list of moves. |
-| `_Builder.__init__` | method | [339](../../splitter/planner.py#L339) | One builder per generate_plans call: its caches are only valid for this state. |
-| `_Builder.build` | method | [348](../../splitter/planner.py#L348) | -> (moves, intents). Orders whose goal is their own cell mean 'stay'. |
-| `_orders_value` | function | [376](../../splitter/planner.py#L376) | Prior score of a plan = sum of the values of the goals its orders pursue. |
-| `generate_plans` | function | [381](../../splitter/planner.py#L381) | The short list of joint plans for `side` to move. Never empty while `side` has creatures. |
-| `_split_orders` | function | [512](../../splitter/planner.py#L512) | Yield (orders, tag, bonus) for plans where the group at `pos` sends detachments. |
-| `_pincer_orders` | function | [580](../../splitter/planner.py#L580) | Yield (orders, tag) converging groups on the best house that only their sum can convert. |
-| `fallback_plan` | function | [618](../../splitter/planner.py#L618) | A plain legal move: the biggest group steps to its least dangerous empty/friendly neighbour. |
-| `quick_plan` | function | [638](../../splitter/planner.py#L638) | Cheap greedy policy for rollouts: take what is adjacent, else walk to the best target. |
-| `_race_goals` | function | [678](../../splitter/planner.py#L678) | RaceMCTS's goal list for one group, best first: convert, sure kill, regroup, flee, chase. |
-| `_race_step` | function | [704](../../splitter/planner.py#L704) | One step towards goal: least danger from sure-killers, then closest; never into a fight we |
-| `race_rollout_plan` | function | [735](../../splitter/planner.py#L735) | Splitter-R rollout policy (RaceMCTS's, on our rules): every group takes its best goal, its |
-| `_offer` | function | [805](../../splitter/planner.py#L805) | Keep the best two (value, cell) in top = [v1, cell1, v2, cell2]; a tie keeps the earlier one. |
-| `_race_step_fast` | function | [813](../../splitter/planner.py#L813) | _race_step for rollouts: our own cells are the forbidden sources, `killers` = enemies >= 1.5 cnt. |
-| `race_plans` | function | [840](../../splitter/planner.py#L840) | Splitter-R root plans (RaceMCTS's plan families, on our rules): every group to its best goal, |
+| `Goal` | class | [58](../../splitter/planner.py#L58) | One candidate objective for one group: a target cell, a kind and an estimated value. |
+| `Plan` | class | [68](../../splitter/planner.py#L68) | A joint plan = one full turn (moves of all our groups), with its prior score and a tag. |
+| `_step_dir` | function | [79](../../splitter/planner.py#L79) | -1, 0 or +1: the direction of one king step from coordinate a towards b. |
+| `straight_path` | function | [84](../../splitter/planner.py#L84) | Cells visited by a king walking diagonally first, then straight (excludes src). |
+| `enemy_attack_loss` | function | [95](../../splitter/planner.py#L95) | Expected creatures we lose if we stand on `cell` with `count` and the best adjacent enemy |
+| `bait_factor` | function | [109](../../splitter/planner.py#L109) | bait_check option: after a sure kill on `cell` our `count` creatures stand there. Another enemy |
+| `race_won` | function | [124](../../splitter/planner.py#L124) | Do we reach `target` (a house needing `need`) no later than any enemy group that can take it? |
+| `detachment_safe` | function | [134](../../splitter/planner.py#L134) | Can a detachment of k creatures walk from src to the house `target` (h humans, k >= h), |
+| `safe_step` | function | [162](../../splitter/planner.py#L162) | Best neighbour of src to walk `count` creatures towards `goal`: |
+| `border_distance` | function | [211](../../splitter/planner.py#L211) | Number of cells between p and the nearest edge of the board (0 = on the edge). |
+| `flee_cell` | function | [216](../../splitter/planner.py#L216) | Where to run: far from the threats FIRST, but into open space (a king chased along an edge or |
+| `candidate_goals` | function | [239](../../splitter/planner.py#L239) | Ranked goals for one group (best first). `committed` = the goal this group had last turn. |
+| `_Builder` | class | [319](../../splitter/planner.py#L319) | Turns a set of orders (src, count, goal) into a legal list of moves. |
+| `_Builder.__init__` | method | [322](../../splitter/planner.py#L322) | One builder per generate_plans call: its caches are only valid for this state. |
+| `_Builder.build` | method | [331](../../splitter/planner.py#L331) | -> (moves, intents). Orders whose goal is their own cell mean 'stay'. |
+| `_orders_value` | function | [358](../../splitter/planner.py#L358) | Prior score of a plan = sum of the values of the goals its orders pursue. |
+| `generate_plans` | function | [363](../../splitter/planner.py#L363) | The short list of joint plans for `side` to move. Never empty while `side` has creatures. |
+| `_split_orders` | function | [494](../../splitter/planner.py#L494) | Yield (orders, tag, bonus) for plans where the group at `pos` sends detachments. |
+| `_pincer_orders` | function | [562](../../splitter/planner.py#L562) | Yield (orders, tag) converging groups on the best house that only their sum can convert. |
+| `fallback_plan` | function | [600](../../splitter/planner.py#L600) | A plain legal move: the biggest group steps to its least dangerous empty/friendly neighbour. |
+| `quick_plan` | function | [620](../../splitter/planner.py#L620) | Cheap greedy policy for rollouts: take what is adjacent, else walk to the best target. |
+| `_race_goals` | function | [660](../../splitter/planner.py#L660) | RaceMCTS's goal list for one group, best first: convert, sure kill, regroup, flee, chase. |
+| `_race_step` | function | [686](../../splitter/planner.py#L686) | One step towards goal: least danger from sure-killers, then closest; never into a fight we cannot win for sure. |
+| `race_rollout_plan` | function | [712](../../splitter/planner.py#L712) | Splitter-R rollout policy (RaceMCTS's, on our rules): every group takes its best goal, its |
+| `_offer` | function | [776](../../splitter/planner.py#L776) | Keep the best two (value, cell) in top = [v1, cell1, v2, cell2]; a tie keeps the earlier one. |
+| `_race_step_fast` | function | [784](../../splitter/planner.py#L784) | _race_step for rollouts: our own cells are the forbidden sources, `killers` = enemies >= 1.5 cnt. |
+| `race_plans` | function | [811](../../splitter/planner.py#L811) | Splitter-R root plans (RaceMCTS's plan families, on our rules): every group to its best goal, |
 
 ## Splitter: evaluation
 
@@ -181,16 +180,16 @@ Chapters 01–08 explain *why*; this page answers *where*.
 |---|---|---|---|
 | `SplitterAgent` | class | [49](../../splitter/agent.py#L49) | The tournament bot: planner + MCTS under a strict time budget, with a legal-move guarantee. |
 | `SplitterAgent.__init__` | method | [52](../../splitter/agent.py#L52) | Build the plan config (variants via keyword arguments), the evaluation and the MCTS engine. |
-| `SplitterAgent.reset` | method | [92](../../splitter/agent.py#L92) | Call between games (main.py does it on END). |
-| `SplitterAgent.compute_moves` | method | [101](../../splitter/agent.py#L101) | main.py interface: moves for the GameState kept from the server messages. |
-| `SplitterAgent.compute_moves_board` | method | [116](../../splitter/agent.py#L116) | Othmane's / Ronita's interface: moves for a BoardState and a Species. |
-| `SplitterAgent.choose` | method | [123](../../splitter/agent.py#L123) | Arena interface: moves for a splitter State (fastest, true ply known). |
-| `SplitterAgent.anytime_moves` | method | [131](../../splitter/agent.py#L131) | main.py's watchdog, when the decision in progress is late: the search's best plan so far |
-| `SplitterAgent._remaining_plies` | method | [147](../../splitter/agent.py#L147) | Plies left, from the ply cap and from the game clock (whichever ends first). |
-| `SplitterAgent._safe_choose` | method | [157](../../splitter/agent.py#L157) | Never-fail wrapper: search, then validate, then fallbacks; always returns legal moves. |
-| `SplitterAgent._decide` | method | [170](../../splitter/agent.py#L170) | _safe_choose's body: search, then validate, then the fallbacks. |
-| `SplitterAgent._choose` | method | [194](../../splitter/agent.py#L194) | Decide: evaluate, generate plans (with last turn's intents), search, remember intents. |
-| `_emergency_move` | function | [246](../../splitter/agent.py#L246) | Last resort: any legal one-step move of the biggest group to a non-hostile cell. |
+| `SplitterAgent.reset` | method | [89](../../splitter/agent.py#L89) | Call between games (main.py does it on END). |
+| `SplitterAgent.compute_moves` | method | [98](../../splitter/agent.py#L98) | main.py interface: moves for the GameState kept from the server messages. |
+| `SplitterAgent.compute_moves_board` | method | [113](../../splitter/agent.py#L113) | Othmane's / Ronita's interface: moves for a BoardState and a Species. |
+| `SplitterAgent.choose` | method | [120](../../splitter/agent.py#L120) | Arena interface: moves for a splitter State (fastest, true ply known). |
+| `SplitterAgent.anytime_moves` | method | [128](../../splitter/agent.py#L128) | main.py's watchdog, when the decision in progress is late: the search's best plan so far |
+| `SplitterAgent._remaining_plies` | method | [144](../../splitter/agent.py#L144) | Plies left, from the ply cap and from the game clock (whichever ends first). |
+| `SplitterAgent._safe_choose` | method | [154](../../splitter/agent.py#L154) | Never-fail wrapper: search, then validate, then fallbacks; always returns legal moves. |
+| `SplitterAgent._decide` | method | [167](../../splitter/agent.py#L167) | _safe_choose's body: search, then validate, then the fallbacks. |
+| `SplitterAgent._choose` | method | [191](../../splitter/agent.py#L191) | Decide: evaluate, generate plans (with last turn's intents), search, remember intents. |
+| `_emergency_move` | function | [242](../../splitter/agent.py#L242) | Last resort: any legal one-step move of the biggest group to a non-hostile cell. |
 
 ## Arena (benchmarking)
 
@@ -316,7 +315,7 @@ Chapters 01–08 explain *why*; this page answers *where*.
 | `play_game` | function | [151](../../tools/teammate_matches.py#L151) | One full game over the protocol: fake server + main.py + the teammate's bot. Returns one row. |
 | `summarize` | function | [206](../../tools/teammate_matches.py#L206) | Per-opponent table (markdown) of the finished games, the versions played, the unavailable bots. |
 | `store_history` | function | [246](../../tools/teammate_matches.py#L246) | One line per opponent in arena/results/history.csv (same file as the arena and server matches). |
-| `model_label` | function | [267](../../tools/teammate_matches.py#L267) | 'flagship', or 'flagship+keep_away=true' when --options are given. |
+| `model_label` | function | [267](../../tools/teammate_matches.py#L267) | 'flagship', or 'flagship+strike_p=0.55' when --options are given. |
 | `_file_safe` | function | [272](../../tools/teammate_matches.py#L272) |  |
 | `main` | function | [276](../../tools/teammate_matches.py#L276) | Command line: update the teammates' bots, play every (opponent, game), record, summarize. |
 

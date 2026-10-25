@@ -95,13 +95,6 @@ Off by default (the backup uses none); the flagship turns on the eight marked be
 | `threat_p` | 0.3 | `PlanConfig` | An enemy within 2 cells that strikes with these odds is a threat to flee from | — |
 | `eval_opp_strike_p` | 0.3 | `EvalParams` | Exposure: the opponent strikes us from these odds | — |
 
-**Campaign 4 candidates** (chapter 17, off by default, under test):
-
-| Parameter | Default | Where | Meaning |
-|---|---|---|---|
-| `keep_away` | False | agent | With `desperate_p`: once no humans are left, our groups never step next to an enemy that beats them with `desperate_p` odds (sets `PlanConfig.keep_away_p` and our side of the race rollouts) |
-| `keep_away_p` | 0.0 | `PlanConfig` | The odds `safe_step` uses for that (0 = off) |
-| `race_root_safe` | False | agent | When not behind, the race root plans' steps also avoid cells next to enemies at least as big as the moving group |
 
 ## 10.5 Removed parameters (measured, then deleted from the code)
 
@@ -120,3 +113,4 @@ Off by default (the backup uses none); the flagship turns on the eight marked be
 | **Campaign 2** (chapter 14): `pincer_kill`, `split_dp`, `corridors`, `tour_bonus`, `intercept`, `covered`, `group_cap` (planner); `plan_cache`, `reuse`, `root_policy`, `risk_lambda`, `rollout_policy`, `opp_max_plans` (search); `endgame_moves`, `tempo` (agent); `eval_contest_half`, `eval_coin_weight`, `eval_dom_bonus` (evaluation) | See chapter 14.2 | All within noise or worse on unseen data; full list with results in [15](15_failed_strategies.md) |
 | **Campaign 3** (chapter 16): `trust_plans` (planner); `plan_cache`, `reuse` (re-tested at 1.5 s), `opp_race` (search) | Skip plan re-checks; transposition cache; tree reuse; aggressive opponent replies at the first opponent layer | No speed-up / −0.8 vs +5.8 with and without the speed half / −2.5 ± 7.6; code in the local snapshot `arena/snapshots/splitter_c3/` |
 | Model "Splitter-Calibrated" (campaign-2 backup: `eval_discount=0.845, eval_k0=8.5, eval_k1=27`) | Evaluation fitted on game outcomes | 0.0 ± 3.1 vs the Classic on fresh maps (16.7): retired; still expressible with those three options |
+| **Campaign 4** (chapter 17): `keep_away` (agent) with `PlanConfig.keep_away_p`; `race_root_safe` (agent) | Keep out of a desperate opponent's reach once no humans are left; safer race root plans when not behind | Screens +13.3 and +12.5, validation together +1.4 ± 4.3: not adopted; code in the local snapshot `arena/snapshots/splitter_c4/` |

@@ -184,14 +184,14 @@ class TestSafety(unittest.TestCase):
         from ai_agent import AIAgent
         old = os.environ.get("SPLITTER_OPTIONS")
         try:
-            os.environ["SPLITTER_OPTIONS"] = "keep_away=true,strike_p=0.6"
+            os.environ["SPLITTER_OPTIONS"] = "strike_p=0.55,rollout_depth_contact=4"
             engine = AIAgent("x", time_limit=0.05).engine
             assert engine is not None
-            self.assertEqual((engine.keep_away, engine.desperate_p), (True, 0.1))
+            self.assertEqual((engine.cfg.strike_p, engine.mcts.rollout_depth_contact), (0.55, 4))
             os.environ["SPLITTER_OPTIONS"] = "not_an_option=1,broken"
             engine = AIAgent("x", time_limit=0.05).engine
             assert engine is not None
-            self.assertEqual((engine.keep_away, engine.mcts.rollout_policy), (False, "race"))
+            self.assertEqual((engine.cfg.strike_p, engine.mcts.rollout_policy), (0.6, "race"))
         finally:
             if old is None:
                 os.environ.pop("SPLITTER_OPTIONS", None)

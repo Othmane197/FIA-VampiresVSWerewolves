@@ -210,7 +210,7 @@ class MCTS:
                 break
             if race:
                 if to_move == root_side:
-                    moves = race_rollout_plan(state, to_move, rng, 0.15, self.rollout_strike, self._cfg_us.keep_away_p)
+                    moves = race_rollout_plan(state, to_move, rng, 0.15, self.rollout_strike)
                 else:
                     moves = race_rollout_plan(state, to_move, rng, 0.15, self._opp_strike)
             else:

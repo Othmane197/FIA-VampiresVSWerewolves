@@ -39,12 +39,15 @@ CPU core (no pondering, no multiprocessing in the bot), 2 s per move, Python 3.8
 | Version ladder (Elo) | 13.7.6 | Not done (`arena.history` covers the need) |
 | Opening preparation | 13.7.7 | Not done (unknown tournament maps) |
 
-## 13.0 Next steps after campaign 3
+## 13.0 Next steps after campaign 4
 
-The current list is [16.8](16_splitter_r.md): the R family's first-strike exposure, RaceMCTS-live,
-moving second, Apex V3, and the flagship's tempo weakness when far ahead (16.9). Of the
-campaign-2 list below, items 1 and 2 are done: the calibrated evaluation was 0.0 ± 3.1 on fresh
-maps and was retired; tree reuse and the cache gave no gain at 1.5 s and were deleted.
+The current ranked list is [17.5](17_campaign4.md): more thinking time made safe by the anytime
+watchdog answer, a contact solver, a learned evaluation, an endgame solver. Campaign 4 closed
+campaign 3's list ([16.8](16_splitter_r.md)): Apex V3 measured (78.6% for both models),
+RaceMCTS-live not a flagship weakness, moving second structural, the tempo fix and safer race
+root plans not adopted (+1.4 ± 4.3 on fresh data). Of the campaign-2 list below, items 1 and 2
+are done: the calibrated evaluation was 0.0 ± 3.1 on fresh maps and was retired; tree reuse and
+the cache gave no gain at 1.5 s and were deleted.
 
 ## 13.1 Next steps after campaign 2
 
@@ -72,17 +75,17 @@ maps and was retired; tree reuse and the cache gave no gain at 1.5 s and were de
 
 ## 13.4 Path planning
 
-1. **Paths around obstacles.** Today distance is Chebyshev and detachments follow [`straight_path`](../../splitter/planner.py#L86). Houses we cannot convert and enemy groups are obstacles (stepping on them starts a battle). A BFS distance field from each target, computed once per turn and shared by all plans, gives true distances and better goals on cluttered maps.
-2. **Space-time safe corridors.** [`detachment_safe`](../../splitter/planner.py#L136) checks only the straight path, and refuses the split if any cell of it can be intercepted. Instead, build a danger map: cell c is unsafe at step t for a detachment of k if an enemy of ≥ k can reach c within t moves. Then search a path in (cell, time) that avoids unsafe cells (A* with Chebyshev distance as the heuristic). Splits that are refused today because of one exposed cell would get a safe detour. *Test:* split rate and win rate on `villages` and `holdout`, plus the safety unit tests.
+1. **Paths around obstacles.** Today distance is Chebyshev and detachments follow [`straight_path`](../../splitter/planner.py#L84). Houses we cannot convert and enemy groups are obstacles (stepping on them starts a battle). A BFS distance field from each target, computed once per turn and shared by all plans, gives true distances and better goals on cluttered maps.
+2. **Space-time safe corridors.** [`detachment_safe`](../../splitter/planner.py#L134) checks only the straight path, and refuses the split if any cell of it can be intercepted. Instead, build a danger map: cell c is unsafe at step t for a detachment of k if an enemy of ≥ k can reach c within t moves. Then search a path in (cell, time) that avoids unsafe cells (A* with Chebyshev distance as the heuristic). Splits that are refused today because of one exposed cell would get a safe detour. *Test:* split rate and win rate on `villages` and `holdout`, plus the safety unit tests.
 3. **House tours.** A detachment of h converts a house and becomes 2h, which can then take a house of up to 2h. Planning a short tour (a greedy prize-collecting path over nearby houses) chooses better detachment sizes and targets than one goal at a time. The race projection already rewards snowballing ([`project_race`](../../splitter/evaluate.py#L69)), so the planner would only need to propose such tours.
 4. **Interception instead of pursuit.** For a hunt, aim at the cell the enemy group is heading to (the `heading` feature, or its nearest convertible house) rather than where it stands now.
 
 ## 13.5 Swarm orchestration
 
-1. **Exact detachment selection.** Choosing which houses to split for is a knapsack problem: creatures available (group − reserve) against houses with value h·γ^d. Today [`_split_orders`](../../splitter/planner.py#L512) enumerates combinations of the best 5 options. A small dynamic program over the creature budget finds the best set exactly, and is cheap for groups ≤ 255.
+1. **Exact detachment selection.** Choosing which houses to split for is a knapsack problem: creatures available (group − reserve) against houses with value h·γ^d. Today [`_split_orders`](../../splitter/planner.py#L494) enumerates combinations of the best 5 options. A small dynamic program over the creature budget finds the best set exactly, and is cheap for groups ≤ 255.
 2. **Planned rendezvous.** After converting, a detachment either drifts or merges back through the `merge` goal. Choosing the meeting cell explicitly (it minimizes rejoin time plus exposure along both paths) would bring the army back together faster before a big house or a fight.
 3. **Retaliation-aware safety.** A detachment next to our main body is protected even if a bigger enemy could reach it: an attacker that wins ends up next to a group that kills it for sure. A rational opponent with lookahead will not attack. The safety check could accept such positions ("covered" detachments), allowing more splits near the main body. Risk: reckless opponents attack anyway, so this needs the hold-out proxies.
-4. **Pincer kills.** The server sums arrivals on a cell before resolving the battle (chapter 02). Two groups that are each too small to kill an enemy group for sure can do it together if their sum is ≥ 1.5× the enemy: the same mechanism as [`_pincer_orders`](../../splitter/planner.py#L580), applied to enemy groups instead of houses.
+4. **Pincer kills.** The server sums arrivals on a cell before resolving the battle (chapter 02). Two groups that are each too small to kill an enemy group for sure can do it together if their sum is ≥ 1.5× the enemy: the same mechanism as [`_pincer_orders`](../../splitter/planner.py#L562), applied to enemy groups instead of houses.
 5. **Screening.** The main body positions itself between the strongest enemy group and our detachments, so interception paths go through it. The rejected *shield* family was driven by predictions; this one is purely geometric.
 6. **Group-count control.** In lost games with 6+ groups, plans got truncated and coordination broke (chapter 03.5). A soft cap on the number of groups, or a merge bonus that grows with the group count, keeps the swarm manageable.
 

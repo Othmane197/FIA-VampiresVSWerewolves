@@ -31,8 +31,8 @@ There are two dangers, and the design answers both:
 
 | Danger | Answer | Where |
 |---|---|---|
-| Small groups get picked off (3 dies to 5) | Every detachment must pass a **safety check**: no enemy can catch it on the way or right after it converts. The main body must stay bigger than nearby enemies. | [`detachment_safe`](../../splitter/planner.py#L136), [`_split_orders`](../../splitter/planner.py#L512) |
-| Splitting explodes the number of possible moves | We do not search raw moves. Each turn the planner proposes **about 15 joint plans** (macro-actions), and MCTS searches over those. | [`generate_plans`](../../splitter/planner.py#L381), [`MCTS.search`](../../splitter/mcts.py#L116) |
+| Small groups get picked off (3 dies to 5) | Every detachment must pass a **safety check**: no enemy can catch it on the way or right after it converts. The main body must stay bigger than nearby enemies. | [`detachment_safe`](../../splitter/planner.py#L134), [`_split_orders`](../../splitter/planner.py#L494) |
+| Splitting explodes the number of possible moves | We do not search raw moves. Each turn the planner proposes **about 15 joint plans** (macro-actions), and MCTS searches over those. | [`generate_plans`](../../splitter/planner.py#L363), [`MCTS.search`](../../splitter/mcts.py#L116) |
 
 The idea was tested, not assumed. The same bot with splitting switched off wins 74% of its games
 instead of 79%, with half the material margin (chapter 08).
@@ -82,17 +82,17 @@ flagship's extra options are listed in [10.4b](10_parameters.md).
 
 1. **[`main.main`](../../main.py#L95)** receives `UPD` and updates the `GameState` through `game_state.GameState.apply_updates`. It then calls `agent.compute_moves(state)`, wrapped in try/except with [`fallback_moves`](../../main.py#L39).
 2. **[`AIAgent.compute_moves`](../../ai_agent.py#L63)** calls the Splitter, and falls back to [`StarterAgent`](../../ai_agent.py#L105) if the Splitter fails.
-3. **[`SplitterAgent.compute_moves`](../../splitter/agent.py#L101)** converts the board with [`State.from_game_state`](../../splitter/state.py#L156) and estimates the ply from its own turn counter. It then calls [`_safe_choose`](../../splitter/agent.py#L157).
-4. **[`SplitterAgent._choose`](../../splitter/agent.py#L194)**:
-   1. estimates the plies left ([`_remaining_plies`](../../splitter/agent.py#L147), from the ply cap and the game clock);
+3. **[`SplitterAgent.compute_moves`](../../splitter/agent.py#L98)** converts the board with [`State.from_game_state`](../../splitter/state.py#L156) and estimates the ply from its own turn counter. It then calls [`_safe_choose`](../../splitter/agent.py#L154).
+4. **[`SplitterAgent._choose`](../../splitter/agent.py#L191)**:
+   1. estimates the plies left ([`_remaining_plies`](../../splitter/agent.py#L144), from the ply cap and the game clock);
    2. evaluates the position ([`evaluate`](../../splitter/evaluate.py#L171)) to decide whether we are *behind*, which allows gambles;
-   3. generates the root plans with [`generate_plans`](../../splitter/planner.py#L381), passing last turn's *intents* (commitment);
+   3. generates the root plans with [`generate_plans`](../../splitter/planner.py#L363), passing last turn's *intents* (commitment);
    4. runs [`MCTS.search`](../../splitter/mcts.py#L116) until the time budget (1.5 s by default) is spent.
 5. **Each MCTS iteration ([`_iterate`](../../splitter/mcts.py#L161))**:
    1. replays plans from the root with sampled dice ([`State.apply`](../../splitter/state.py#L96));
    2. expands a new plan, whose children come from the same planner for both sides;
-   3. rolls out 2 greedy plies ([`quick_plan`](../../splitter/planner.py#L638));
+   3. rolls out 2 greedy plies ([`quick_plan`](../../splitter/planner.py#L620));
    4. scores the leaf with [`evaluate`](../../splitter/evaluate.py#L171) and backs up the result.
 6. **The most visited root plan is played.** Its intents (where each group is heading) are remembered for next turn.
-7. **[`_safe_choose`](../../splitter/agent.py#L157) checks the moves** with [`check_moves`](../../splitter/rules.py#L91), the server's own cheating rules. If they fail it uses [`fallback_plan`](../../splitter/planner.py#L618), and then [`_emergency_move`](../../splitter/agent.py#L246).
+7. **[`_safe_choose`](../../splitter/agent.py#L154) checks the moves** with [`check_moves`](../../splitter/rules.py#L91), the server's own cheating rules. If they fail it uses [`fallback_plan`](../../splitter/planner.py#L600), and then [`_emergency_move`](../../splitter/agent.py#L242).
 8. **`main.py` sends the `MOV`.**
