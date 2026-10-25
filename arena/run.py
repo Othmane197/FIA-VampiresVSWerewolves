@@ -2,7 +2,7 @@
 Arena: measure a bot against a panel of opponents on a suite of maps.
 
     python -m arena.run                                      # Splitter vs default panel, all maps
-    python -m arena.run --bot Splitter Splitter-Calibrated --opp Apex RaceMCTS --games 2 --time 0.3
+    python -m arena.run --bot Splitter Splitter-Classic --opp Apex RaceMCTS --games 2 --time 0.3
     python -m arena.run --bot "Splitter:c=0.9,rollout_depth=0" --maps villages,given
     python -m arena.run --bot Splitter --opp Apex --maps testmap --watch      # one game, verbose
 

@@ -5,29 +5,36 @@ rollouts) plus the top-ranked fixes of the code review, without importing RaceMC
 weaknesses; test the result against the teammates' **live** bots, unseen opponent styles and our
 own flagship; keep it only if it wins on data never used to build it.
 
-**References, kept unchanged:** the flagship `Splitter` and the backup `Splitter-Calibrated`
-(chapter 14). Verified after every change: the flagship still makes the same decisions as the
-frozen `Snap:v7` on 300 of 300 test positions.
+**References, kept unchanged during the campaign:** the flagship `Splitter` and the backup
+`Splitter-Calibrated` (chapter 14). Verified after every change: the flagship still makes the same
+decisions as the frozen `Snap:v7` on 300 of 300 test positions.
+
+**Outcome (16.9):** Splitter-R3 won the pre-registered final and is now the flagship `Splitter`;
+the campaign-2 flagship is the backup `Splitter-Classic`; Splitter-Calibrated is retired. The
+names below are the campaign's: Splitter-R is now `"Splitter:strike_p=0,desperate_p=0"`, the old
+flagship `Splitter-Classic`, Splitter-Calibrated
+`"Splitter-Classic:eval_discount=0.845,eval_k0=8.5,eval_k1=27"`. The deleted options run from the
+local snapshot (`Snap:c3:<options>`).
 
 **Sources:** the merger study ("The Splitter: progression, methodology and the RaceMCTS merger
 study", Proposal A) and the code review ("The Splitter: code review and ranked edge plan",
 ranked suggestions 1 to 3).
 
-## 16.1 What was built (all options, off by default)
+## 16.1 What was built (all options, off by default; the flagship now uses six of them plus `desperate_p`, 16.6)
 
 | Option | From | What it does | Where |
 |---|---|---|---|
-| `rollout_policy="race"` | Merger A, step 1 | RaceMCTS's rollout policy on our exact rules: each group takes its best goal (convert h / (d + 0.5), sure kill 1.2 e / (d + 0.5), regroup, flee, chase), its second with probability 0.15; never steps into a fight it cannot win for sure | [`race_rollout_plan`](../../splitter/planner.py#L714) |
+| `rollout_policy="race"` | Merger A, step 1 | RaceMCTS's rollout policy on our exact rules: each group takes its best goal (convert h / (d + 0.5), sure kill 1.2 e / (d + 0.5), regroup, flee, chase), its second with probability 0.15; never steps into a fight it cannot win for sure | [`race_rollout_plan`](../../splitter/planner.py#L712) |
 | `rollout_strike=0.45` | Merger A, step 2 | In race rollouts, a group adjacent to an enemy it beats with at least these odds strikes first (both sides) | `race_rollout_plan` |
-| `rollout_depth_contact=6` | Merger A, step 3 | Rollouts this deep when opposing groups are within 3 cells or no humans are left; `rollout_depth` (2) elsewhere | [`in_contact`](../../splitter/mcts.py#L324), [`MCTS._iterate`](../../splitter/mcts.py#L231) |
+| `rollout_depth_contact=6` | Merger A, step 3 | Rollouts this deep when opposing groups are within 3 cells or no humans are left; `rollout_depth` (2) elsewhere | [`in_contact`](../../splitter/mcts.py#L235), [`MCTS._iterate`](../../splitter/mcts.py#L157) |
 | `leaf_mix=0.5` | Merger A, step 4 | Leaf value = (1 − mix) · value before the rollout + mix · value after it | `MCTS._iterate` |
-| `race_root=True` | Merger A, step 6 | RaceMCTS's plan families (all groups to their best goal, whole-group splits to two houses, regroup, one group on its second goal) added at the root only, at half the top prior | [`race_plans`](../../splitter/planner.py#L813), [`SplitterAgent._choose`](../../splitter/agent.py#L169) |
-| `bait_check=True` | Code review, rank 2 | A kill goal is discounted (× 0.1 / × 0.4) when another enemy next to the victim's cell could kill / strike the hunter right after; such kills get no hunt plan | [`bait_factor`](../../splitter/planner.py#L110) |
-| `trust_plans=True` | Code review, rank 3 | The planner skips re-checking plans its builder made legal by construction; the tree and the safety net still check | `generate_plans` |
-| `plan_cache=True` | Code review, rank 3; merger study, new ideas | Transposition cache inside one search: plans keyed by (board, side, behind), leaf values by (board, side to move, plies left). Ported from the campaign-2 archive | [`MCTS._plans`](../../splitter/mcts.py#L90), [`MCTS._evaluate`](../../splitter/mcts.py#L109) |
-| `strike_p=0.6` | Code review, rank 4 (light) | Iteration 2: a separate "strike" plan when one of our groups is next to an enemy it beats with at least these odds but not for sure (between 1.1x and 1.5x its size), even when we are not behind. The flagship only offers such strikes when losing. The base plan is unchanged; the search judges the dice | [`generate_plans`](../../splitter/planner.py#L364) (section 6b) |
-| `opp_race=True` | Code review, rank 5 (cheap form) | Iteration 2: the opponent's first reply (the layer just below the root) also considers RaceMCTS-style aggressive plans, at half the top prior. Our tree's opponent is otherwise our own cautious planner | [`_with_race_replies`](../../splitter/mcts.py#L311) |
-| `reuse=True` | Code review, rank 3; merger study, new ideas | Tree reuse between turns: last turn's node for our played plan, then the opponent reply that replayed without dice turns the board we left into the board we see. A random battle on the way means no exact match and a fresh tree. Guarded so a tree is only reused for the exact position it was built for | [`MCTS.subtree_after`](../../splitter/mcts.py#L209), [`MCTS._make_root`](../../splitter/mcts.py#L188) |
+| `race_root=True` | Merger A, step 6 | RaceMCTS's plan families (all groups to their best goal, whole-group splits to two houses, regroup, one group on its second goal) added at the root only, at half the top prior | [`race_plans`](../../splitter/planner.py#L811), [`SplitterAgent._choose`](../../splitter/agent.py#L164) |
+| `bait_check=True` | Code review, rank 2 | A kill goal is discounted (× 0.1 / × 0.4) when another enemy next to the victim's cell could kill / strike the hunter right after; such kills get no hunt plan | [`bait_factor`](../../splitter/planner.py#L109) |
+| `trust_plans=True` (**deleted**) | Code review, rank 3 | The planner skips re-checking plans its builder made legal by construction; the tree and the safety net still check | was in `generate_plans` |
+| `plan_cache=True` (**deleted**) | Code review, rank 3; merger study, new ideas | Transposition cache inside one search: plans keyed by (board, side, behind), leaf values by (board, side to move, plies left). Ported from the campaign-2 archive | was in `MCTS._plans`, `MCTS._evaluate` |
+| `strike_p=0.6` | Code review, rank 4 (light) | Iteration 2: a separate "strike" plan when one of our groups is next to an enemy it beats with at least these odds but not for sure (between 1.1x and 1.5x its size), even when we are not behind. The flagship only offers such strikes when losing. The base plan is unchanged; the search judges the dice | [`generate_plans`](../../splitter/planner.py#L363) (section 6b) |
+| `opp_race=True` (**deleted**) | Code review, rank 5 (cheap form) | Iteration 2: the opponent's first reply (the layer just below the root) also considers RaceMCTS-style aggressive plans, at half the top prior. Our tree's opponent is otherwise our own cautious planner | was `_with_race_replies` (mcts.py) |
+| `reuse=True` (**deleted**) | Code review, rank 3; merger study, new ideas | Tree reuse between turns: last turn's node for our played plan, then the opponent reply that replayed without dice turns the board we left into the board we see. A random battle on the way means no exact match and a fresh tree. Guarded so a tree is only reused for the exact position it was built for | was `MCTS.subtree_after`, `MCTS._make_root` |
 
 RaceMCTS's code itself is **not** imported: its simulator (`game_engine.py`) treats a defender 1.5x
 bigger as a sure defence, which the real server does not.
@@ -150,6 +157,24 @@ speed-up of iteration 2 (below) came after it started and does not change decisi
 
 Both are off by default; their screen and how a modified candidate is judged are rules 6 and 7 in 16.3.
 
+### The iteration-2 screen (rule 6)
+
+`python -m arena.run --bot Splitter-R Splitter-R:strike_p=0.6 Splitter-R:opp_race=true Splitter-R:strike_p=0.6,opp_race=true --slots arena/slots/tuning.json --drop-worse --games 1 --time 1.5 --hard 2.0 --workers 3 --seed 9600 --out arena/results/c3_iter2.csv`
+(116 minutes; the race-rollout speed-up included in every variant).
+
+| Variant | Paired Δ vs Splitter-R (60 games) | By opponent | Rule 6 |
+|---|---|---|---|
+| `strike_p=0.6` | **+5.0 ± 6.9** | RaceMCTS +16.7, TacticalSplitter +12.5, Snap:v7 +6.2, Apex 0, Expecti −15.0 | kept |
+| `opp_race=true` | −2.5 ± 7.6 | Apex −12.5, Snap:v7 −9.4, TacticalSplitter +25 (4 games) | dropped |
+| both | +7.5 ± 7.0 | | not used (one component dropped) |
+
+- **R2 = Splitter-R + `strike_p=0.6`.** The strike plans help most against the bots that fight in contact (RaceMCTS, TacticalSplitter); nothing is clearly better or worse at this sample size, as expected for a change that acts in 1% of positions.
+- **`opp_race` is dropped:** searching the opponent's aggressive replies costs 7% of the iterations and buys nothing measurable; it hurts most against the deathball Apex, whose replies it does not resemble.
+- **1 timeout:** Splitter-R itself (the reference, not a new option) took 2.05 s for one move (against Apex on sym_9x15b, a game it won); the same run had moves of 1.83 and 1.64 s. While this screen ran, analysis scripts and the test suite were running on the same 4 cores, and below-normal processes can be paused by any normal-priority burst: the likely cause, though not provable (the csv has no timestamps). In the 408 later R-family games the slowest move was 1.56 s. 0 illegal moves.
+
+The rest of the campaign (rules 8, 4/7 and 5) then ran unattended overnight
+(`c3_night.py`, which applies the written rules in order and logs every decision).
+
 ## 16.6 Iteration 3: what the stage-2 losses show
 
 Splitter-R wins more, but **it loses by being wiped out**: 39 of its 46 losses are wipeouts (the
@@ -180,3 +205,106 @@ On the ply-33 position, both models then stay out of reach in 6 of 6 searches (a
 checks it). Off by default: the references are unchanged (300/300 and 244/300 identical
 decisions to the frozen v7). The race root plans' exposure (cause 1) is left to the search for
 now: they are also where R's gains against deathball bots come from.
+
+### The iteration-3 screen (rule 8)
+
+`python -m arena.run --bot Splitter-R:strike_p=0.6 Splitter-R:strike_p=0.6,desperate_p=0.1 --slots arena/slots/tuning.json --drop-worse --games 1 --time 1.5 --hard 2.0 --workers 3 --seed 9650 --out arena/results/c3_iter3.csv` (65 minutes).
+
+**`desperate_p=0.1` on R2: +7.5 ± 7.7 (60 games): kept.** R2 scored 68.3%, R2 with it 75.8%;
+0 problems, slowest move 1.56 s. The final candidate became
+**Splitter-R3 = Splitter-R + `strike_p=0.6` + `desperate_p=0.1`** (`MODELS["r3"]`, tournament
+`SPLITTER_MODEL=r3`).
+
+## 16.7 Stage 3: the pre-registered final (fresh maps, never-used styles, 1.5 s)
+
+`python -m arena.run --bot Splitter Splitter-Calibrated Splitter-R Splitter-R:strike_p=0.6,desperate_p=0.1 --opp Apex-live RaceMCTS-live Expecti-live Styled:7 Styled:8 Styled:9 Styled:10 Styled:11 Styled:12 --maps fresh --drop-worse --games 1 --time 1.5 --hard 2.0 --workers 3 --seed 9700 --out arena/results/c3_stage3.csv`
+
+576 games in 5 h 26 min overnight; no bot was dropped. The steps from the iteration-2 screen to
+here ran unattended: a scratch script applied rules 6, 8, 4 and 7 in order, exactly as written,
+and logged every decision. It ran fully offline (the arena plays local copies of all bots).
+
+| Model | Score | W / D / L | Paired Δ vs flagship (144 games) | Live bots: Apex / RaceMCTS / Expecti |
+|---|---|---|---|---|
+| Flagship | 64.9% ± 4.0 | 80 / 27 / 37 | — | 94% / 75% / 50% |
+| Backup (Calibrated) | 64.9% ± 4.0 | 80 / 27 / 37 | 0.0 ± 3.1 | 88% / 62% / 50% |
+| Splitter-R | 70.8% ± 3.8 | 97 / 10 / 37 | +5.9 ± 4.1 | 97% / 59% / 50% |
+| **Splitter-R3** | **72.9% ± 3.7** | **99 / 12 / 33** | **+8.0 ± 3.9** | 97% / 62% / **69%** |
+
+| Paired Δ vs flagship, by opponent (16 games each) | Splitter-R | Splitter-R3 |
+|---|---|---|
+| Apex-live | +3.1 ± 3.1 | +3.1 ± 3.1 |
+| RaceMCTS-live | −15.6 ± 16.9 | **−12.5 ± 8.5** |
+| Expecti-live | 0.0 ± 12.9 | **+18.8 ± 13.6** |
+| Styled:7 (gambling deathball) | +15.6 ± 7.5 | +15.6 ± 11.8 |
+| Styled:8 (greedy splitter) | 0.0 | 0.0 |
+| Styled:9 (high exploration) | +18.8 ± 16.4 | +3.1 ± 14.8 |
+| Styled:10 / 11 / 12 (cautious, never gamble) | +6.2 / **+28.1** / −3.1 | +12.5 / **+34.4** / −3.1 |
+
+**Verdict (rule 7):** Splitter-R3 beats Splitter-R on the fresh maps (+2.1 ± 3.4) and its own
+difference to the flagship is above 2 SE on stage 3 alone (+8.0 ± 3.9 = 2.05 SE): **by the
+pre-registered rule, Splitter-R3 replaces the flagship.** For comparison, Splitter-R alone would
+only have become a third reference: positive on fresh maps, but +6.0 ± 3.1 pooled with stage 2,
+just under 2 SE (1.94).
+
+What the numbers say, and what they do not:
+
+- **The margin is thin.** 2.05 SE passes the rule, but by very little; the honest summary is "Splitter-R3 is better than the flagship with about 98% confidence on this panel, by about 8 points".
+- **The fix works where it was aimed.** Against Expecti-live, the bot that made every low-odds strike in stage 2, R3 gains +18.8 where R gained nothing. In the logs of games not won, strikes under 30% that destroyed at least half our army while we were ahead: flagship 2 (one lost a 50-to-36 lead to a 12% strike), backup 1, **R3 0**.
+- **RaceMCTS-live is the one live bot where the R family scores lower than the flagship** in this run (R3 62%, flagship 75%), although R was +6.2 against it in stage 2: over both stages, R's difference there is about −5, so it is a weak spot to keep watching, not a proven one.
+- **The gain does not come from the teammates' bots:** against the six never-used styles R3 is +62 points summed, against the three live bots +9.
+- **Robustness:** in all 1,018 campaign-3 games of the R family, 0 illegal moves, 0 crashes and 1 timeout (the 2.05 s move of the iteration-2 screen, see 16.5); slowest move in the final 1.52 s. In a tournament the client's watchdog sends a fallback move at 1.8 s, so such a stall costs one weak move, not a timeout.
+- **The backup is no better than the flagship** on fresh data (0.0 ± 3.1, after +1.3 ± 6.1 pooled in campaign 2).
+
+### Opponent versions
+
+The teammates' code was fetched at 19:05 on 24 October. Othmane pushed **Apex V3** ("race
+projection, transit pruning and target partitioning") at 23:10 the same evening, then removed
+his older sparring bots from his branch. So the final's Apex-live is his 22-October champion;
+the real-conditions matches below play V3. His removed bots (TacticalSplitter, Greedy, ...) are
+kept frozen at his commit 6535a1f in `arena/vendor/Othmane-archive/`
+([`fetch_opponents.ARCHIVE`](../../arena/fetch_opponents.py#L35)), so the tuning slots still work.
+
+### Rule 5: real conditions (passed)
+
+`python tools/teammate_matches.py --model r3` (the teammates' code re-fetched first: Apex V3).
+12 games over the real protocol (2 s per move, 200 plies, 5-minute clock, `main.py` client):
+
+| Opponent | Version | W - D - L | Score | Our timeouts | Cheats | Slowest move |
+|---|---|---|---|---|---|---|
+| Apex-live | **Apex V3** (Othmane@73fdaf5, 24 Oct 23:47) | 3 - 1 - 0 | 88% | 0 | 0 | 1.65 s |
+| RaceMCTS-live | Ronita@139df90 | 2 - 0 - 2 | 50% | 0 | 0 | 1.49 s |
+| Expecti-live | Dana@4554265 | 4 - 0 - 0 | 100% | 0 | 0 | 1.49 s |
+| **All** | | **9 - 1 - 2** | **79%** | **0** | **0** | 1.65 s |
+
+**No illegal move, no timeout: rule 5 passed.** Both losses are against RaceMCTS as the first
+player. The 18-ply loss on thetrap was a near coin flip: our 8 stood next to its 7 with one house
+of 2 left beside both; striking first wins 64%, we took the house (10 vs 7) and it struck at
+35% and won. Either choice wins about 65%; the weakness is letting such a small map come down to
+one dice roll. Results: `arena/results/teammates/20261025-052506_r3/`.
+
+## 16.8 Remaining weaknesses and next steps
+
+1. **First-strike exposure of the R family** (cause 1 in 16.6): in games not won, R3 leaves a group next to an enemy that beats it at 50–99% on 12.6% of its moves (flagship 0.1%). This aggression is also what wins the draws, so the fix must be selective: for example, race root plans that avoid cells next to enemies that beat the moving group, only when we are not behind.
+2. **RaceMCTS-live** (see above): replay its losses with the exposure tables first.
+3. **Moving second:** every model scores 15 to 25 points lower as the second player (R3: 85% first, 60% second).
+4. **Apex V3** is new: a dedicated arena run against it is the first thing to do in the next campaign.
+5. **Tempo when far ahead** (found after the final, 16.9): the flagship fails two tempo puzzles the backup solves (split 3 + 3 into two houses at once; enter a big house with two groups together). Cause, isolated by switching the parts of `desperate_p` off one at a time: the desperate opponent's gambles from 10% (`gamble_p`). Deep in the tree, the fast line ends with our merged group chasing a cornered enemy, which then strikes first at 25%; our own planned follow-up still walks up to kill a group we do not need to kill. Candidate fix: when the opponent is desperate, discount kill goals that need an approach (we are ahead; keeping distance wins). Like any change, it needs a screen and a validation before it can go into the flagship. A test marks the weakness (`test_flagship_tempo_puzzles`, an expected failure).
+
+## 16.9 Decision and the two kept models
+
+**The team's decision (taken after rule 5):** Splitter-R3 becomes the flagship, the campaign-2
+flagship the backup; the calibrated evaluation is retired (0.0 ± 3.1 against the Classic on fresh maps).
+The backup was chosen for diversity rather than rank: Splitter-R (second in the final) shares the
+flagship's search and its exposure weakness, while the Classic is the most tested model and loses
+differently (27 draws and 24 wipeouts in the final, against 12 and 29 for R3).
+
+| Model | `MODELS` | Arena | Tournament | Verified |
+|---|---|---|---|---|
+| **Flagship** (Splitter-R3) | `"flagship"`: `rollout_policy="race", rollout_strike=0.45, rollout_depth_contact=6, leaf_mix=0.5, race_root=True, bait_check=True, strike_p=0.6, desperate_p=0.1` | `Splitter` | `python main.py <ip> <port>` | Same decisions as the candidate that won the final (`Snap:c3` with these options) on 300 of 300 positions under a fixed clock |
+| **Backup** (Splitter-Classic) | `"backup"`: `{}` (all defaults) | `Splitter-Classic` | `SPLITTER_MODEL=backup python main.py <ip> <port>` | Same decisions as the frozen v7 on 300 of 300 positions |
+
+**Clean-up after the decision** (the project rule: measured-and-failed options are deleted, 10.5):
+`trust_plans`, `plan_cache`, `reuse` and `opp_race` were removed from the code (frozen first in
+`arena/snapshots/splitter_c3/`), with the two identity checks above re-run afterwards (300/300
+both) and the full test suite passing (46 tests, 1 expected failure: the tempo weakness above).
+The tactical puzzles now run for both models.

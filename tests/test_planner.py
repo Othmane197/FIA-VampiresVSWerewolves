@@ -138,16 +138,6 @@ class TestSplitterR(unittest.TestCase):
                         ok, why = check_moves(s.rows, s.cols, s.groups[side], p.moves)
                         self.assertTrue(ok, f"{why}: {p.tag} {p.moves}")
 
-    def test_trusted_plans_are_still_legal(self):
-        rng = random.Random(11)
-        for _ in range(300):
-            s = random_state(rng)
-            for side in (V, W):
-                if s.groups[side]:
-                    for p in generate_plans(s, side, PlanConfig(trust_plans=True, bait_check=True)):
-                        ok, why = check_moves(s.rows, s.cols, s.groups[side], p.moves)
-                        self.assertTrue(ok, f"{why}: {p.tag} {p.moves}")
-
 
 class TestSplits(unittest.TestCase):
     def test_split_generated_for_two_small_houses(self):

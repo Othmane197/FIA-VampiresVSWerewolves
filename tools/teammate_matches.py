@@ -4,7 +4,6 @@ Vampires, 2 as Werewolves), recorded.
 
     python tools/teammate_matches.py                       # the flagship vs the teammates' LIVE bots
     python tools/teammate_matches.py --model backup        # the backup model instead
-    python tools/teammate_matches.py --model r             # the Splitter-R candidate (chapter 16)
     python tools/teammate_matches.py --opp Apex RaceMCTS   # only some opponents
     python tools/teammate_matches.py --all                 # every bot on the teammates' branches
     python tools/teammate_matches.py --no-update           # replay the versions already downloaded
@@ -266,8 +265,7 @@ def store_history(rows, a, run_id: str):
 def main():
     """Command line: update the teammates' bots, play every (opponent, game), record, summarize."""
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--model", choices=("flagship", "backup", "r"), default="flagship",
-                    help="which of our models plays (r = the Splitter-R candidate, chapter 16)")
+    ap.add_argument("--model", choices=("flagship", "backup"), default="flagship", help="which of our two models plays")
     ap.add_argument("--opp", nargs="+", default=None, help=f"opponents (default: {' '.join(MAIN_BOTS)})")
     ap.add_argument("--all", action="store_true", help="every teammate bot: " + " ".join(TEAMMATE_BOTS))
     ap.add_argument("--games", type=int, default=4,

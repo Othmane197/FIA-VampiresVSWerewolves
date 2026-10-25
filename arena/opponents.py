@@ -11,16 +11,18 @@ The team uses two agent interfaces; adapters translate:
     SplitterBot    SplitterAgent.choose(State, side)   our bot (fast path, true ply)
 
 Bots INSIDE the repo:
-    "Splitter"            the flagship (splitter.agent.MODELS["flagship"])
-    "Splitter-Calibrated" the backup (MODELS["backup"]: evaluation fitted on game outcomes)
-    "Splitter-R"          campaign-3 candidate (MODELS["r"]: flagship + RaceMCTS rollouts and root plans)
+    "Splitter"            the flagship (splitter.agent.MODELS["flagship"]: Splitter-R3, chapter 16)
+    "Splitter-Classic"    the backup (MODELS["backup"]: all defaults, the campaign-2 flagship = Snap:v7)
+                          campaign-3 names: Splitter-R = "Splitter:strike_p=0,desperate_p=0",
+                          Splitter-Calibrated = "Splitter-Classic:eval_discount=0.845,eval_k0=8.5,eval_k1=27"
     "Splitter:k=v,..."    any variant inline, e.g. "Splitter:splits=0" (the deathball ablation),
                           "Splitter:gamble=always,c=0.9" (an aggressive style), "Splitter:c=0.8"
     "Snap:<version>[:k=v,..]"  a frozen copy of splitter/ (arena/snapshot.py)
     "Styled:<n>"          a reproducible random opponent STYLE (styled_config): a third validation
                           set against over-fitting to the teammates' bots (chapter 14)
     teammates' bots       Apex, RaceMCTS, Expecti, Grabber, ... loaded from arena/vendor/<branch>/
-                          (run `python -m arena.fetch_opponents --fetch`)
+                          (run `python -m arena.fetch_opponents --fetch`); Othmane's older sparring
+                          bots (TacticalSplitter, Greedy, ...) from the frozen arena/vendor/Othmane-archive/
     teammates' LIVE bots  Apex-live, RaceMCTS-live, Expecti-live: their tournament entry points with
                           their own presets and time budgets (Othmane's "champion" Apex, Dana's SafeAgent)
 Bots OUTSIDE the repo:
@@ -160,7 +162,7 @@ def _registry() -> Dict[str, Callable[[float], Bot]]:
     """name -> builder(time_limit) for every non-Splitter bot (teammates' bots are loaded lazily)."""
     def othmane(cls_name, **kw):
         def make(_t):
-            (rv,) = load_vendor("Othmane", ["rival_agents"])
+            (rv,) = load_vendor("Othmane-archive", ["rival_agents"])     # deleted from his branch: frozen copy
             cls = getattr(rv, cls_name)
             return BoardBot(cls_name, lambda: cls(**kw))
         return make
@@ -233,8 +235,7 @@ PANEL = ["Apex", "RaceMCTS", "Expecti", "TacticalSplitter", "Grabber", "Rusher",
 def _models():
     """The two kept models, named for the arena (defined once, in splitter/agent.py)."""
     from splitter.agent import MODELS
-    return {"Splitter": dict(MODELS["flagship"]), "Splitter-Calibrated": dict(MODELS["backup"]),
-            "Splitter-R": dict(MODELS["r"])}
+    return {"Splitter": dict(MODELS["flagship"]), "Splitter-Classic": dict(MODELS["backup"])}
 
 
 VARIANTS = _models()

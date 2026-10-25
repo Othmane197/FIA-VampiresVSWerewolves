@@ -11,7 +11,7 @@ Run with `python -m unittest discover tests` (standard library only, about 35 s)
 |---|---|---|
 | [test_rules.py](../../tests/test_rules.py) | `test_server_formula`, `test_defender_1_5x_is_random_not_sure`, `test_sure_results`, `test_legal_split`, `test_cheats`, `test_byte_overflow_refused`, `test_probe1_split_and_merged_attack`, `test_sure_kill_and_merge`, `test_mean_mode_deterministic` | Our rules = the real server's: formulas, the defender-random rule, each cheating case, and a replay of the live probe game |
 | [test_planner.py](../../tests/test_planner.py) | `test_fuzz_all_plans_legal` (500 random positions × 3 configs, more than 1,000 plans, plus `quick_plan` and `fallback_plan`), `test_safe_step_never_walks_into_bigger_humans`, `test_split_generated_for_two_small_houses`, `test_no_split_when_disabled`, `test_detachment_safety`, `test_unsafe_house_not_split_to` | Every generated plan is legal; splits appear when they should and never toward an unsafe house |
-| [test_agent.py](../../tests/test_agent.py) | **Puzzles:** `test_takes_the_sure_kill`, `test_does_not_suicide_or_wait_next_to_a_killer`, `test_splits_to_take_two_adjacent_houses`, `test_converges_two_groups_on_a_big_house`. **Safety:** `test_time_budget_big_map`, `test_fuzz_never_illegal`, `test_backup_model_never_illegal`, `test_watchdog_sends_the_fallback_when_late`, `test_tournament_client_selects_the_model`, `test_gamestate_interface` | Correct tactical decisions; the budget is respected; a legal move every time, for both models; a late agent is replaced by the fallback move; `SPLITTER_MODEL` really selects the model |
+| [test_agent.py](../../tests/test_agent.py) | **Puzzles** (for both models unless noted): `test_takes_the_sure_kill`, `test_does_not_suicide_or_wait_next_to_a_killer`, `test_splits_to_take_two_adjacent_houses` and `test_converges_two_groups_on_a_big_house` (backup), `test_does_not_offer_a_desperate_opponent_a_shot` (flagship), and `test_flagship_tempo_puzzles`, an **expected failure** that documents a known flagship weakness (16.9). **Safety:** `test_time_budget_big_map`, `test_fuzz_never_illegal`, `test_flagship_model_never_illegal`, `test_splitter_r_options_never_illegal`, `test_watchdog_sends_the_fallback_when_late`, `test_tournament_client_selects_the_model`, `test_gamestate_interface` | Correct tactical decisions; the budget is respected; a legal move every time, for both models and every campaign-3 option; a late agent is replaced by the fallback move; `SPLITTER_MODEL` really selects the model |
 | [test_protocol.py](../../tests/test_protocol.py) | `test_full_game_no_cheat_no_timeout`, `test_small_map_to_the_end` | Two real `main.py` processes play complete games against the fake server: no cheating, no timeout, clean BYE |
 | [test_arena.py](../../tests/test_arena.py) | `test_python_file_bots_are_loaded_and_play`, `test_arena_task_against_a_file_bot_stores_its_files`, `test_flagship_and_backup`, `test_styled_opponents_are_reproducible`, `test_unknown_option_is_refused`, `test_history_and_comparisons_are_appended`, `test_rounds_keep_the_pairs_together`, `test_paired_delta_and_drop_rule`, `test_informative_slots_skip_games_nobody_disagrees_on`, `test_real_conditions_script_plays_and_records`, `test_schedule_covers_every_map_and_side`, `test_two_programs_play_over_the_protocol` | The testing infrastructure itself: external bots of both interfaces load and play and their logs get valid file names; the two kept models are built as documented; styled opponents are reproducible; results are stored; the faster-benchmark machinery (rounds, early stopping, slot selection) is correct; the real-conditions script plays, alternates the connection order and records its games; two client programs play a server match (7.5) |
 
@@ -50,29 +50,31 @@ Command line: `python tools/fake_server.py --map testmap.xml --port 5555`.
 
 | File | Role |
 |---|---|
-| [fetch_opponents.py](../../arena/fetch_opponents.py) | [`fetch`](../../arena/fetch_opponents.py#L38) copies the teammates' current bots from their git branches (`origin/Othmane`, `origin/Ronita`, `origin/Dana`) into `arena/vendor/` (gitignored): **every top-level `.py` file** except the shared starter-kit files and their tests, so new or renamed helper modules are picked up and deleted ones removed. `vendor/<branch>/REVISION` records the commit copied. Run `python -m arena.fetch_opponents --fetch` (`--fetch` = `git fetch` their latest pushes first) |
-| [opponents.py](../../arena/opponents.py) | [`make_bot(spec, time_limit)`](../../arena/opponents.py#L331) builds any bot behind one interface ([`Bot`](../../arena/opponents.py#L79)). Adapters for the team's two interfaces ([`GameStateBot`](../../arena/opponents.py#L91), [`BoardBot`](../../arena/opponents.py#L113)), plus [`SplitterBot`](../../arena/opponents.py#L130), [`SnapshotBot`](../../arena/opponents.py#L277) and external files ([`load_external`](../../arena/opponents.py#L288)). [`load_vendor`](../../arena/opponents.py#L55) imports a teammate's modules without name clashes. All specs are listed in 7.5 |
+| [fetch_opponents.py](../../arena/fetch_opponents.py) | [`fetch`](../../arena/fetch_opponents.py#L48) copies the teammates' current bots from their git branches (`origin/Othmane`, `origin/Ronita`, `origin/Dana`) into `arena/vendor/` (gitignored): **every top-level `.py` file** except the shared starter-kit files and their tests, so new or renamed helper modules are picked up and deleted ones removed. `vendor/<branch>/REVISION` records the commit copied. Run `python -m arena.fetch_opponents --fetch` (`--fetch` = `git fetch` their latest pushes first) |
+| [opponents.py](../../arena/opponents.py) | [`make_bot(spec, time_limit)`](../../arena/opponents.py#L332) builds any bot behind one interface ([`Bot`](../../arena/opponents.py#L81)). Adapters for the team's two interfaces ([`GameStateBot`](../../arena/opponents.py#L93), [`BoardBot`](../../arena/opponents.py#L115)), plus [`SplitterBot`](../../arena/opponents.py#L132), [`SnapshotBot`](../../arena/opponents.py#L278) and external files ([`load_external`](../../arena/opponents.py#L289)). [`load_vendor`](../../arena/opponents.py#L57) imports a teammate's modules without name clashes. All specs are listed in 7.5 |
 | [referee.py](../../arena/referee.py) | [`play_game`](../../arena/referee.py#L59): one game with the **server's rules** (it uses `State.apply` and `check_moves`). Illegal or crash → the offender loses; too slow → turn skipped. Records the move log, split turns and decision times; `record=True` keeps the full trace (ground truth for chapter 11) |
 | [maps.py](../../arena/maps.py) | [`build_suite`](../../arena/maps.py#L149): 14 **tuning** maps in 6 families: `given` (thetrap, testmap), `sym`, `villages` (many small houses), `prize` (big central house), `close` (close starts), `sparse`; plus the **`holdout`** family (8 maps, fresh seeds) that is only used to validate, never to tune (`--maps all` excludes it). All generated maps are point-symmetric ([`symmetric_map`](../../arena/maps.py#L63)), so neither side has a map advantage. [`write_xml`](../../arena/maps.py#L43) exports a map for the real GUI; `.xml` paths are accepted too |
 | [run.py](../../arena/run.py) | The benchmark command line ([`main`](../../arena/run.py#L260)). Every (opponent, map) pair is played on **both species**, alternating the first player. **Seeds are fixed per game**, so two configurations meet the same dice. `--bot A B C` runs several configurations in **one shared pool**, longest games first, and prints a **paired comparison** of each with the first ([`compare`](../../arena/run.py#L169)). `--panel fast` = Apex, RaceMCTS, Expecti, TacticalSplitter; `--seed` changes all dice; `--save-all-logs` records full games. Reports win rate ± standard error by opponent, map, side and first player ([`report`](../../arena/run.py#L94)) and stores everything (7.6) |
 | [history.py](../../arena/history.py) | Browse the stored results of every run and server match (7.6) |
 | [replay.py](../../arena/replay.py) | Replay one game verbosely |
-| [snapshot.py](../../arena/snapshot.py) | `python -m arena.snapshot v7` freezes `splitter/` as `Snap:v7`, for A/B tests against the next version. Kept locally (gitignored): `v5fix` (the v5 baseline of chapters 11–12) and `v7` (the current flagship) |
+| [snapshot.py](../../arena/snapshot.py) | `python -m arena.snapshot v7` freezes `splitter/` as `Snap:v7`, for A/B tests against the next version. Kept locally (gitignored): `v5fix` (the v5 baseline of chapters 11–12), `v7` (= the backup, Splitter-Classic), `c2` (campaign 2's archive) and `c3` (the code of campaign 3, with the options removed afterwards: tree reuse, transposition cache, trusted plans, `opp_race`; `Snap:c3:<options>` reproduces chapter 16's runs) |
 
 ## 7.5 Testing against other bots, inside and outside the repo
 
 | Opponent | How to name it | Example |
 |---|---|---|
-| **Our two models** | `Splitter` (flagship), `Splitter-Calibrated` (backup) | `--bot Splitter Splitter-Calibrated` |
+| **Our two models** | `Splitter` (flagship, Splitter-R3), `Splitter-Classic` (backup) | `--bot Splitter Splitter-Classic` |
+| Retired campaign-3 names | Splitter-R = `"Splitter:strike_p=0,desperate_p=0"`; Splitter-Calibrated = `"Splitter-Classic:eval_discount=0.845,eval_k0=8.5,eval_k1=27"` | as written |
 | Randomized opponent styles (no teammate plays like this) | `Styled:<n>` (`--panel styled` = `Styled:1`–`Styled:6`) | `--opp Styled:2 Styled:5` |
 | Style proxies | `Splitter:splits=0` (deathball), `Splitter:gamble=always,c=0.9` (aggressive) | `--opp "Splitter:splits=0"` |
 | Any variant of ours | `"Splitter:key=value,..."` (any `SplitterAgent` / `PlanConfig` option; unknown keys are refused) | `"Splitter:c=0.8,rollout_depth=0"` |
 | A frozen version of ours | `Snap:<version>[:key=value,..]` | `Snap:v7`, `Snap:v5fix` |
-| Teammates' bots (from their branches) | `Apex`, `RaceMCTS`, `Expecti`, `TacticalSplitter`, `Grabber`, `Rusher`, `Greedy`, `Starter`, `Turtle`, … (after `python -m arena.fetch_opponents`) | `--opp Apex RaceMCTS` |
+| Teammates' bots (from their branches) | `Apex`, `RaceMCTS`, `Expecti`, `TacticalSplitter`, `Grabber`, `Rusher`, `Greedy`, `Starter`, `Turtle`, … (after `python -m arena.fetch_opponents`). Othmane deleted `TacticalSplitter`, `Greedy`, `Random` and his other older bots from his branch on 24 Oct; they are kept frozen at his commit 6535a1f in `arena/vendor/Othmane-archive/` ([`ARCHIVE`](../../arena/fetch_opponents.py#L35)) | `--opp Apex RaceMCTS` |
+| **Teammates' live tournament bots** | `Apex-live`, `RaceMCTS-live`, `Expecti-live`: their own entry points, presets and time budgets | `--opp Apex-live RaceMCTS-live Expecti-live` |
 | **Any Python bot file outside the repo** | `py:<path/to/file.py>[:ClassName]` | `--opp "py:../OtherTeam/ai_agent.py:AIAgent"` |
 | **Any program in any language** (Java, C++, an exe, another team's `main.py`) | [tools/server_match.py](../../tools/server_match.py) with two client commands | see below |
 
-**External Python files** ([`load_external`](../../arena/opponents.py#L288)). The file is imported
+**External Python files** ([`load_external`](../../arena/opponents.py#L289)). The file is imported
 with its own folder on the path (so its sibling modules load). Without `ClassName`, the first class
 defining `compute_moves` is used. The interface is detected from the signature:
 `compute_moves(state)` → the repo's `GameState` interface; `compute_moves(board, species)` →
@@ -98,7 +100,7 @@ The arena is built for fast, paired comparisons. To see how the **tournament bot
 each teammate **under the real server's conditions**, use this script instead:
 
 ```bash
-python tools/teammate_matches.py                       # flagship vs Apex, TacticalSplitter, RaceMCTS, Expecti: 4 games each
+python tools/teammate_matches.py                       # flagship vs Apex-live, RaceMCTS-live, Expecti-live: 4 games each
 python tools/teammate_matches.py --model backup        # the backup model
 python tools/teammate_matches.py --opp Apex --games 8  # one opponent, more games (keep a multiple of 4)
 python tools/teammate_matches.py --all                 # every bot on the teammates' branches
@@ -146,7 +148,7 @@ Every run is kept, so experiments can be compared later without re-running them.
 
 ```bash
 python -m arena.history                    # last 20 runs
-python -m arena.history --bot Splitter-Calibrated   # one bot's runs
+python -m arena.history --bot Splitter-Classic   # one bot's runs
 python -m arena.history --comparisons      # paired comparisons
 ```
 
@@ -163,8 +165,15 @@ python -m arena.run --bot Snap:v7 Splitter --opp Apex RaceMCTS Expecti Styled:1 
 # replication on fresh dice, all 22 maps
 python -m arena.run --bot Snap:v7 Splitter --maps given,sym,villages,prize,close,sparse,holdout --games 1 --time 0.2 --seed 7000
 # tournament speed
-python -m arena.run --bot Splitter Splitter-Calibrated --slots arena/slots/holdout.json --drop-worse --time 1.5 --hard 2.0 --workers 4 --out run.csv
+python -m arena.run --bot Splitter Splitter-Classic --slots arena/slots/holdout.json --drop-worse --time 1.5 --hard 2.0 --workers 3 --out run.csv
 ```
+
+**On this laptop (4 cores, `python` is the Store alias):** use at most 3 workers at 1.5 s, check
+the CPU load first, and start heavy runs with the priority set at creation, so that the workers
+inherit it: `cmd /c start "" /belownormal /b /wait python -m arena.run ...`. Setting the priority
+after launch only lowers the alias process, not the interpreter and its workers (found in
+campaign 3). Do not run other heavy jobs during a 1.5 s run: below-normal workers stall when the
+CPU is busy, which shows up as slow moves (chapter 16.5).
 
 **Reading the numbers:**
 - Differences smaller than about 2 standard errors are noise. 24 games per opponent means about ±10%; 448 games means about ±2%.

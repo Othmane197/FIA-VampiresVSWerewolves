@@ -73,10 +73,10 @@ class TestExternalBots(unittest.TestCase):
 class TestVariants(unittest.TestCase):
     def test_flagship_and_backup(self):
         flagship = make_bot("Splitter", 0.05)
-        backup = make_bot("Splitter-Calibrated", 0.05)
+        backup = make_bot("Splitter-Classic", 0.05)
         assert isinstance(flagship, SplitterBot) and isinstance(backup, SplitterBot)
-        self.assertEqual(flagship.agent.ev.k1, 14.0)     # the flagship's evaluation is unchanged
-        self.assertEqual(backup.agent.ev.k1, 27.0)
+        self.assertEqual(flagship.agent.mcts.rollout_policy, "race")     # Splitter-R3 (chapter 16)
+        self.assertEqual(backup.agent.mcts.rollout_policy, "quick")      # the campaign-2 flagship
         state = dict(build_suite("thetrap"))["thetrap"]
         state.max_ply = 16
         r = play_game(state, {V: backup, W: flagship}, seed=2)

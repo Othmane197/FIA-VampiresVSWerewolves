@@ -13,7 +13,7 @@ in VS Code, Ctrl+click opens the file at that line.
 | 01 | [Overview](01_overview.md) | The problem, the idea (smart splitting), the architecture, the two kept models (flagship and backup), and what happens in one turn |
 | 02 | [Game rules and the real server](02_game_rules_and_server.md) | The rules as the server really applies them (probed and disassembled), and our exact copy of them: `splitter/rules.py`, `splitter/state.py` |
 | 03 | [Plan generator](03_plan_generator.md) | How a turn is reduced to about 15 sensible joint plans: goals, safe steps, exact-size splits, safety checks, pincers, flee, commitment (`splitter/planner.py`) |
-| 04 | [Evaluation](04_evaluation.md) | How a position is turned into a win probability: immediate tactics, merge- and contest-aware race projection, exposure, end-of-game scaling; the backup's calibrated constants (`splitter/evaluate.py`) |
+| 04 | [Evaluation](04_evaluation.md) | How a position is turned into a win probability: immediate tactics, merge- and contest-aware race projection, exposure, end-of-game scaling; the retired calibrated constants (`splitter/evaluate.py`) |
 | 05 | [Search (MCTS)](05_search_mcts.md) | Open-loop Monte Carlo Tree Search over joint plans (`splitter/mcts.py`) |
 | 06 | [Agent and safety net](06_agent_and_safety.md) | The time budget, the watchdog, the fallback chain, the never-illegal guarantee, the two models and how to choose one on tournament day (`splitter/agent.py`, `ai_agent.py`, `main.py`) |
 | 07 | [Testing and benchmarking](07_testing_and_benchmarking.md) | Unit tests, the fake server, the arena, testing against bots inside and outside the repo (any language), randomized-style opponents, stored results, how to run an experiment, and 2–3× faster benchmarks (informative slots, early stopping, resume) |
@@ -24,7 +24,8 @@ in VS Code, Ctrl+click opens the file at that line.
 | 12 | [Improvement campaign 1](12_experiments.md) | Screening, anti-overfitting validation on hold-out opponents and maps, replication on fresh dice, a pre-registered test; what reliably beat the baseline and what did not |
 | 13 | [Future improvements](13_future_ideas.md) | The idea list after campaign 1, the outcome of each idea, and the next steps |
 | 14 | [Improvement campaign 2](14_campaign2.md) | 17 ideas (search, caching, path planning, swarm, prediction, evaluation fitting, clock), their implementation, four validation stages up to a pre-registered 1.5 s test, the choice and verification of the two kept models |
-| 15 | [Failed strategies](15_failed_strategies.md) | The do-not-retry register: every rejected idea of both campaigns, its result, the likely reason, and what would justify a retry |
+| 15 | [Failed strategies](15_failed_strategies.md) | The do-not-retry register: every rejected idea of the three campaigns, its result, the likely reason, and what would justify a retry |
+| 16 | [Campaign 3: Splitter-R](16_splitter_r.md) | The flagship merged with RaceMCTS's rollouts and root plans, three iterations driven by how games were lost (first strikes, the desperate opponent), pre-registered stages up to a final on fresh maps and never-used styles, real-conditions matches, the new flagship and backup, and the remaining weaknesses |
 
 ## The optimization process at a glance
 
@@ -34,7 +35,8 @@ in VS Code, Ctrl+click opens the file at that line.
 4. **Validate at tournament speed (chapter 08.2).** The runner-up was neutral at 0.2 s and −14.8 at 1.5 s: the final word always belongs to 1.5 s games.
 5. **Campaign 2 (chapter 14): explore widely, keep almost nothing.** Seventeen ideas, all within noise; screen winners changed sign on unseen data again. The evaluation fit (from game outcomes) became the backup model. Testing became 2–3× cheaper (informative slots, early stopping).
 6. **Verify the choice.** A pre-registered 1.5 s run fixed the ranking; the kept flagship makes the same decisions as the validated v7 on 300 of 300 test positions.
-7. **Record the failures (chapter 15)** so that nobody spends another week rediscovering them.
+7. **Campaign 3 (chapter 16): merge a strength, then fix how games are lost.** RaceMCTS's deep dice-driven rollouts, used only in contact, turned draws into wins (+6.2 on hold-out data). Reading the wipeouts then found two mechanisms: good-odds first strikes never offered, and a losing opponent striking at 21%. The result, Splitter-R3, won a pre-registered final on fresh maps and never-used styles (+8.0 ± 3.9) and became the flagship; the campaign-2 flagship is the backup.
+8. **Record the failures (chapter 15)** so that nobody spends another week rediscovering them.
 
 The raw evidence for chapter 02 is [../SERVER_FINDINGS.md](../SERVER_FINDINGS.md).
 
@@ -52,6 +54,7 @@ The documentation is updated in the **same change** as the code:
 
 | Date | Change | Chapters updated |
 |---|---|---|
+| 2026-10-25 | **Campaign 3 (v9).** New flagship **Splitter** = Splitter-R3: RaceMCTS-style race rollouts with first strikes, deep only in contact, leaf mixing, race root plans, anti-bait kill check, good-odds strike plans, the desperate-opponent model (`MODELS["flagship"]`). Backup **Splitter-Classic** = the campaign-2 flagship (`MODELS["backup"] = {}`). Retired: Splitter-Calibrated. Deleted after measurement: `trust_plans`, `plan_cache`, `reuse`, `opp_race` (code in the local snapshot `splitter_c3`). Race rollout policy 33% faster with identical decisions. Arena: live teammate bots (`Apex-live`, `RaceMCTS-live`, `Expecti-live`), `fresh` maps, Othmane's deleted sparring bots frozen in `arena/vendor/Othmane-archive/`; `git fetch` with a timeout. Verified: flagship = the final's candidate, backup = v7 (300/300 each). 46 tests, 1 expected failure (the flagship's tempo weakness). | 01, 03, 04, 05, 06, 07, 10, 13, 15, 16 (new), README |
 | 2026-10-22 | Clean-up: expired results deleted (every run of Oct 18–19, campaign 1's CSVs and lost-game logs, the Oct 19 recorded games, the superseded teammate run, smoke-test runs); kept: the 1.5 s validations, campaign 2's runs (screen, stages B–D, clock), the recorded games behind the backup's fit, the latest teammate run, and the cumulative `history.csv` / `comparisons.csv`. Static scan: no unreferenced code in our modules. `__pycache__` folders removed. 39 tests pass. | 07, 08, 14 |
 | 2026-10-21 | `tools/teammate_matches.py` always plays the teammates' latest code: `git fetch` + copy at the start of every run (`--no-update` to skip), a load check per bot (unavailable bots reported and skipped), the version played recorded in every output. `arena/fetch_opponents.py` copies every top-level `.py` of a branch (except shared starter files and tests) instead of a fixed list, and removes deleted files. | 07 |
 | 2026-10-21 | `tools/teammate_matches.py` default changed to 4 games per opponent (2 as Vampires, 2 as Werewolves, each map from both sides). | 07 |

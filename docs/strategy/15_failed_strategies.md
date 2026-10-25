@@ -49,13 +49,15 @@ playable as `"Snap:c2:<option>=<value>"`. The cleaned style HMM is also in `aren
 |---|---|---|---|---|
 | Light tree (fewer plan variants below the root) | RaceMCTS 35% vs 48% | 05.4 | A weaker opponent model outweighs the extra iterations | — |
 | Planner rollouts (rollout = the planner's top plan) | **−5.9 ± 3.4** (tuning) | 14.3 | A full plan generation per rollout step leaves too few iterations | — |
-| Rollout depth 4 | −6.0 (screening) | 12 | Noisier leaf values | — |
+| Rollout depth 4 | −6.0 (screening, 0.1 s) | 12 | Too few iterations at 0.1 s | **Retried at 1.5 s in campaign 3** (16.4): depth 4 +1.7 ± 5.0, depth 8 +0.8 ± 6.7; uniform depth swings ±20 by opponent. Deep rollouts **in contact only** became part of Splitter-R (not a failure any more) |
+| Aggressive opponent replies at the first opponent layer (`opp_race`, campaign 3; deleted, code in `Snap:c3`) | −2.5 ± 7.6 (tuning, 60 games, 1.5 s); Apex −12.5 | 16.5 | Costs 7% of the iterations; a deathball's replies do not look like RaceMCTS's | A much cheaper `race_plans`, or a measured opponent that plays them |
+| Trusted plans (skip re-checking builder-made plans, `trust_plans`, campaign 3; deleted) | No measurable speed-up at 1.5 s (3,420 vs 3,462 iterations) | 16.4 | The re-checks' share was inflated by the profiler | — |
 | Sequential halving at the root | −0.4 ± 3.8 (tuning) | 14.3 | No gain with ~15 root plans and a progressive-bias prior | — |
 | Risk-aware final choice (mean − 0.5·std when ahead) | +1.1 ± 3.8 (tuning) | 14.3 | Noise | — |
 | 18 opponent plans per node (instead of 12) | +0.4 ± 3.1 (tuning) | 14.3 | Noise | — |
 | Exploration c = 0.9 / 0.4; prior weight 0.2 / 1.2; widening k = 1 / 4; max plans 12; danger weight 5; commitment 0.7 | all within ±3 (screening) | 12 | Defaults are at a local optimum | — |
-| Tree reuse between turns | +0.0 ± 3.1 (tuning); with the cache −3.5 ± 4.3 (unseen) | 14.3 | Works mechanically (15–49% hits) but adds no measurable strength at 0.25 s | **A test at 1.5 s** (time matters there: 14.5) |
-| Transposition cache (plans + evaluations) | +0.7 ± 2.4 (tuning) | 14.3 | 15–20% cache hits; speed was not the bottleneck at 0.25 s | **A test at 1.5 s** |
+| Tree reuse between turns | +0.0 ± 3.1 (tuning); with the cache −3.5 ± 4.3 (unseen). **Campaign 3, 1.5 s:** inside the "speed half", −0.8 ± 7.4 with it vs +5.8 ± 7.8 without (tuning, 60 games) | 14.3, 16.4 | Works mechanically (15–49% hits) but adds no measurable strength, at 0.25 s or at 1.5 s | — (the 1.5 s test is done) |
+| Transposition cache (plans + evaluations) | +0.7 ± 2.4 (tuning). **Campaign 3, 1.5 s:** 1,495 hits per move but only +2 to +4% iterations | 14.3, 16.4 | The key (a sorted copy of the board) costs about what a hit saves | An incremental (Zobrist) position key |
 | Planner caches alone (4× speed, campaign 1) | 50% head-to-head | 08.4 | Speed not the bottleneck at 0.2 s (kept for the time margin) | — |
 | `gamble="always"` for our own plans | 58.3% vs 60.4% | 08.4 | No gain (`adaptive` stays the default) | — |
 
@@ -64,7 +66,7 @@ playable as `"Snap:c2:<option>=<value>"`. The cleaned style HMM is also in `aren
 | Idea | Result | Details | Likely reason | Retry only if |
 |---|---|---|---|---|
 | Full evaluation fit (all constants, incl. contest, coin-flip exposure, domination bonus) | Better log-loss (−9%) but **−2.4 ± 4.0** in games | 14.3 | Selection bias: the recorded games come from a bot that avoids the risks these terms describe | Games recorded from a bot without those terms |
-| Calibration-only fit (sharper sigmoid, discount 0.845) | **Kept as the backup**: +5.9 ± 4.4 (0.25 s), +5.2 ± 8.5 and −2.9 ± 8.9 (1.5 s) | 14.3 | Not proven at 1.5 s | More 1.5 s games could promote it |
+| Calibration-only fit (sharper sigmoid, discount 0.845; campaign-2 backup "Splitter-Calibrated") | +5.9 ± 4.4 (0.25 s), +5.2 ± 8.5 and −2.9 ± 8.9 (1.5 s); **campaign 3 final on fresh maps: 0.0 ± 3.1**: retired | 14.3, 16.7 | Better forecasts, no better decisions (lesson 3) | — |
 
 ## 15.5 Time, clock and game-level ideas
 
@@ -88,3 +90,4 @@ playable as `"Snap:c2:<option>=<value>"`. The cleaned style HMM is also in `aren
 2. **Speed matters for the verdict.** The style HMM was neutral at 0.2 s and clearly harmful at 1.5 s. Always validate at 1.5 s.
 3. **Better prediction ≠ better play.** The opponent HMMs predicted well and the full evaluation fit predicted better, but both lost games. The search optimizes decisions, not forecasts, and data recorded under one policy cannot value risks that policy avoided.
 4. **The flagship's design is at a robust local optimum.** About 40 measured variations in two campaigns found one real improvement (the search bug fix). Future gains need new information (more 1.5 s games, new opponents) or a new mechanism, not more parameter variations.
+5. **Campaign 3 confirmed lesson 4: the gains came from new mechanisms found in lost games.** Deep rollouts in contact (a strength of RaceMCTS) turned draws into wins; the "desperate opponent" came from reading how Splitter-R was wiped out (a 21% strike by a losing bot). Both passed hold-out and fresh-map tests; the speed tricks and the extra opponent replies, chosen from theory, did not. Before the next idea, measure how the current best loses (exposure and battle-odds tables, chapter 16.6).

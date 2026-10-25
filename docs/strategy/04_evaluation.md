@@ -1,6 +1,6 @@
 # 04 · Evaluation: [splitter/evaluate.py](../../splitter/evaluate.py)
 
-[`evaluate(state, side, to_move, remaining_plies)`](../../splitter/evaluate.py#L170) returns an
+[`evaluate(state, side, to_move, remaining_plies)`](../../splitter/evaluate.py#L171) returns an
 estimate of **P(side wins)** in [0, 1]. MCTS uses it at the end of every rollout (chapter 05). The
 agent also uses it at the root, to decide whether we are behind and gambles become allowed
 (chapter 06).
@@ -12,7 +12,7 @@ It is computed in four stages.
 - One side has no creatures: 0 or 1 (0.5 if both are gone).
 - No plies left: compare totals, the server's rule (1, 0.5 or 0).
 
-## 4.1 Immediate tactics: [`resolve_immediate`](../../splitter/evaluate.py#L44)
+## 4.1 Immediate tactics: [`resolve_immediate`](../../splitter/evaluate.py#L45)
 
 The player to move takes its **certain** gains first. Biggest group first, each group takes the
 best of:
@@ -21,7 +21,7 @@ best of:
 
 Without this, a position where we are about to be eaten would look fine.
 
-## 4.2 Race projection: [`project_race`](../../splitter/evaluate.py#L68)
+## 4.2 Race projection: [`project_race`](../../splitter/evaluate.py#L69)
 
 This is the heart of the evaluation, and the reason splitting is valued correctly.
 
@@ -32,7 +32,7 @@ clock 0 and the other at 0.5 (a half-move head start). Then, repeatedly:
 2. **Merge-aware.** Also consider two runners of the same side meeting first (half their distance), then taking a house that **neither could take alone**.
    - This was added after a lost game where we had 19 creatures split 12 + 7, and the opponent took an 18-house prize.
    - Without merge-awareness the projection said "nobody can take the prize", so regrouping looked useless.
-3. **Contest-aware: [`_contest`](../../splitter/evaluate.py#L122).** If an enemy runner can reach the house right after the capture:
+3. **Contest-aware: [`_contest`](../../splitter/evaluate.py#L123).** If an enemy runner can reach the house right after the capture:
    - with ≥ 1.5× our new size → the capture is **not counted**;
    - with ≥ our new size (it strikes at ≥ 50%) → it **counts half**.
    - This was added after losses where small groups raced into the enemy's zone and only fed it.
@@ -46,7 +46,7 @@ contested.
 **Snowballing is modelled too.** A runner that converts becomes bigger and can then take bigger
 houses.
 
-## 4.3 Exposure: [`exposure`](../../splitter/evaluate.py#L141)
+## 4.3 Exposure: [`exposure`](../../splitter/evaluate.py#L142)
 
 Each projected total loses the expected creatures that the enemy can take next turn. For each of
 our groups we keep the worst threat:
@@ -58,7 +58,7 @@ our groups we keep the worst threat:
 
 This is what punishes splits that are too thin, and stepping next to an equal enemy group.
 
-## 4.4 From margin to probability: inside [`evaluate`](../../splitter/evaluate.py#L170)
+## 4.4 From margin to probability: inside [`evaluate`](../../splitter/evaluate.py#L171)
 
 ```
 a, b  = projected totals (us, them) minus exposure, floored at 0.1
@@ -75,27 +75,30 @@ uncertain. This fixed a lost game where we gave up a safe late lead by stepping 
 
 ## 4.5 Helper
 
-[`material_balance`](../../splitter/evaluate.py#L219): (our total − theirs) / everything. The agent
+[`material_balance`](../../splitter/evaluate.py#L220): (our total − theirs) / everything. The agent
 uses it to switch on gambles in the last 20 plies when behind
-([`SplitterAgent._choose`](../../splitter/agent.py#L169)).
+([`SplitterAgent._choose`](../../splitter/agent.py#L164)).
 
-## 4.6 Tunable constants and the backup's calibrated evaluation
+## 4.6 Tunable constants, and the retired calibrated evaluation
 
-The three calibration constants are an [`EvalParams`](../../splitter/evaluate.py#L29) object passed
+The calibration constants are an [`EvalParams`](../../splitter/evaluate.py#L29) object passed
 to `evaluate(..., ev=...)` (through MCTS): `discount` (0.93), `k0` (6) and `k1` (14) in
-k = k0 + k1·progress. The risk terms (contest factors, the 30% strike threshold of `exposure`, the
-domination bonus) are fixed in the code.
+k = k0 + k1·progress, and `opp_strike_p` (0.3), the odds from which `exposure` counts the
+opponent's strikes on us. The other risk terms (contest factors, the domination bonus) are fixed
+in the code. **Both kept models use these defaults**; the flagship lowers `opp_strike_p` to 0.1
+for one decision when the opponent is losing (`desperate_p`, chapter 16.6), since a losing bot
+strikes at low odds.
 
 | Model | discount | k = k0 + k1·progress | Where the values come from |
 |---|---|---|---|
-| Flagship | 0.93 | 6 → 20 | Hand-set (v1–v5, lost-game analysis) |
-| **Backup "Splitter-Calibrated"** | **0.845** | **8.5 → 35.5** | Fitted on game outcomes by [tools/tune_eval.py](../../tools/tune_eval.py) (chapter 14.3) |
+| Both kept models | 0.93 | 6 → 20 | Hand-set (v1–v5, lost-game analysis) |
+| Retired "Splitter-Calibrated" (campaign-2 backup) | 0.845 | 8.5 → 35.5 | Fitted on game outcomes by [tools/tune_eval.py](../../tools/tune_eval.py) (chapter 14.3) |
 
-**Why the backup exists.** On hold-out games the flagship's evaluation is **under-confident about
-leads**: positions it rates 0.65–0.75 are won 92–93% of the time. The fitted constants cut the
-log-loss on hold-out games by 9% and fix most of that calibration error. In games, the backup
-scored +5.9 ± 4.4 at 0.25 s and +1.3 ± 6.1 (pooled) at 1.5 s: not proven better, so it is the
-backup, not the flagship.
+**Why the calibrated evaluation was retired.** On hold-out games the default evaluation is
+**under-confident about leads**: positions it rates 0.65–0.75 are won 92–93% of the time. The
+fitted constants cut the log-loss on hold-out games by 9% and fix most of that calibration error.
+In games it scored +5.9 ± 4.4 at 0.25 s and +1.3 ± 6.1 (pooled) at 1.5 s, and then exactly 0.0 ±
+3.1 in campaign 3's final on fresh maps: better forecasts, no better play (lesson 3 of chapter 15).
 
 **Removed experiments** ([15 · Failed strategies](15_failed_strategies.md)):
 - endgame kiting (`kite`: maximal steepness once no humans are left): +5.1 tuning, −0.6 hold-out;

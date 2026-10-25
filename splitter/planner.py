@@ -46,9 +46,8 @@ class PlanConfig:
     commit_bonus: float = 0.35     # value bonus for keeping last turn's goal (stops oscillation)
     pincer: bool = True            # synchronized multi-group conversion of a house too big for one group
     hunt_bonus: float = 0.1        # prior bonus of the "hunt" plan (raised against splitting opponents)
-    # ---- Splitter-R options (campaign 3, chapter 16), off by default
+    # ---- campaign-3 options (chapter 16), off by default; the flagship uses bait_check and strike_p
     bait_check: bool = False       # discount a kill whose victim cell sits next to another strong enemy
-    trust_plans: bool = False      # skip re-checking builder-made plans (legal by construction)
     strike_p: float = 0.0          # > 0: "strike" plans against adjacent enemies beaten with these odds,
                                    # even when not behind (0 = only gambles when behind, the flagship)
     gamble_p: float = 0.3          # gamble goals from these odds (lower for a desperate opponent)
@@ -389,10 +388,9 @@ def generate_plans(state: State, side: int, cfg: Optional[PlanConfig] = None,
         moves, plan_intents = builder.build(orders)
         if not moves or moves in seen:
             return
-        if not cfg.trust_plans:                 # Splitter-R trusts the builder; the tree re-checks
-            ok, _ = check_moves(state.rows, state.cols, mine, moves)
-            if not ok:
-                return
+        ok, _ = check_moves(state.rows, state.cols, mine, moves)
+        if not ok:
+            return
         seen.add(moves)
         plans.append(Plan(moves, _orders_value(orders) + bonus, tag, plan_intents))
 

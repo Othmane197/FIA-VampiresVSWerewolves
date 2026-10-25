@@ -15,7 +15,7 @@ Expecti and Apex (chapter 08.2).
 
 | Tool | What it does | Where |
 |---|---|---|
-| `Styled:<n>` opponents, `--panel styled` | Reproducible random opponent *styles*: gamble policy, caution, reserve, split rate, search or greedy. They share our planner, so they are not independent of our bot, but none of them plays like a teammate's bot | [`styled_config`](../../arena/opponents.py#L243) |
+| `Styled:<n>` opponents, `--panel styled` | Reproducible random opponent *styles*: gamble policy, caution, reserve, split rate, search or greedy. They share our planner, so they are not independent of our bot, but none of them plays like a teammate's bot | [`styled_config`](../../arena/opponents.py#L244) |
 | Game clock, `--game-seconds` | The server's `MaxGameDuration` in the referee: the game ends when both bots' thinking time adds up to it | [`play_game`](../../arena/referee.py#L59) |
 | Evaluation fitting | Texel-style tuning of the evaluation constants on recorded games, with a check set and a calibration table | [tools/tune_eval.py](../../tools/tune_eval.py) |
 | Keep-awake | The benchmark asks Windows not to sleep while it runs. Campaign 2's first screen was hit by two overnight sleeps (moves "lasting" 6,400 s and 44,800 s); those game keys were excluded from the paired comparison | [`keep_awake`](../../arena/run.py#L245) |
@@ -47,7 +47,7 @@ candidate of chapter 13.1).
 
 | Option | Implementation | Measured |
 |---|---|---|
-| `plan_cache=1` | **Transposition cache** inside one search: `generate_plans` results keyed by (position, side, behind) and `evaluate` results keyed by (position, side to move, plies left) ([`MCTS._plans`](../../splitter/mcts.py#L90), `MCTS._evaluate`) | Positions repeat a lot when there are few groups: 93% of plan generations on thetrap and 62% on prize_11x17 were repeats, 0% on vil_13x21. In real games: 124–207 cache hits per decision at 0.25 s |
+| `plan_cache=1` | **Transposition cache** inside one search: `generate_plans` results keyed by (position, side, behind) and `evaluate` results keyed by (position, side to move, plies left) ([`MCTS._plans`](../../splitter/mcts.py#L81), `MCTS._evaluate`) | Positions repeat a lot when there are few groups: 93% of plan generations on thetrap and 62% on prize_11x17 were repeats, 0% on vil_13x21. In real games: 124–207 cache hits per decision at 0.25 s |
 
 The profile of a 1.5 s decision (vil_13x21, 8 groups) shows where the time goes: plan generation
 50%, rollouts 22%, evaluation 14%, legality checks 14%.

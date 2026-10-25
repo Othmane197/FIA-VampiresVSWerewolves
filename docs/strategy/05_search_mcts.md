@@ -8,20 +8,20 @@ The PDF requires an AI that anticipates the opponent's moves. We use **MCTS**, b
 
 ## 5.1 Tree and nodes
 
-- **[`Node`](../../splitter/mcts.py#L33)** stores:
+- **[`Node`](../../splitter/mcts.py#L31)** stores:
   - the plan that leads to it, and which side played it;
   - visits and the sum of rewards (always from the **root** side's point of view);
   - the plan's normalized prior;
   - the list of plans not yet expanded.
 - **Turns alternate:** root = our turn, children = our plans, grandchildren = the opponent's replies, and so on.
-- **Plans at a node come from [`MCTS._plans`](../../splitter/mcts.py#L90):**
+- **Plans at a node come from [`MCTS._plans`](../../splitter/mcts.py#L81):**
   - *our side:* the agent's `PlanConfig` (`inner_cfg`);
   - *the opponent:* a config with `gamble="always"` and at most 12 plans. We assume it strikes first whenever adjacent with P ≥ 0.3, because real opponents do (chapter 04).
   - Priors are normalized to [0, 1] by the best sibling.
 
-## 5.2 One iteration: [`MCTS._iterate`](../../splitter/mcts.py#L231)
+## 5.2 One iteration: [`MCTS._iterate`](../../splitter/mcts.py#L157)
 
-1. **Selection.** From the root, repeatedly pick a child with [`MCTS._select`](../../splitter/mcts.py#L119):
+1. **Selection.** From the root, repeatedly pick a child with [`MCTS._select`](../../splitter/mcts.py#L95):
    ```
    score = Q + c·√(ln N / n) + prior_bias · prior / (1 + n)
    ```
@@ -32,13 +32,13 @@ The PDF requires an AI that anticipates the opponent's moves. We use **MCTS**, b
 2. **Open-loop replay.** Nodes do not store boards. Each iteration re-applies the plans from the root with [`State.apply`](../../splitter/state.py#L96) and **fresh dice**, so chance is averaged over iterations. If a stored plan has become illegal in this sampled future (a group died in a battle), the descent stops there ([`check_moves`](../../splitter/rules.py#L91)).
 3. **Expansion with progressive widening.**
    - The plan to expand is first checked with `check_moves` in *this* sampled future: plans are generated once per node, but open-loop replays can reach the node with different dice. Without this check an illegal plan raised inside `State.apply`, the whole search for the turn was lost, and the fallback move was played. That was the case on 4.1% of v5's turns; the fix is worth +2.2 points (chapter 11.8).
-   - A node may have at most k(N) = 2·√(N+1) children ([`MCTS._widen_limit`](../../splitter/mcts.py#L135)), so new plans are added in prior order as the node gets visited.
+   - A node may have at most k(N) = 2·√(N+1) children ([`MCTS._widen_limit`](../../splitter/mcts.py#L111)), so new plans are added in prior order as the node gets visited.
    - The root is fully expanded: every root plan is tried at least once.
-4. **Rollout.** 2 plies of the greedy [`quick_plan`](../../splitter/planner.py#L622).
-5. **Evaluation.** [`evaluate`](../../splitter/evaluate.py#L170) at the leaf, with the remaining plies reduced by the depth reached.
+4. **Rollout.** 2 plies of the greedy [`quick_plan`](../../splitter/planner.py#L620).
+5. **Evaluation.** [`evaluate`](../../splitter/evaluate.py#L171) at the leaf, with the remaining plies reduced by the depth reached.
 6. **Backpropagation.** Visits + 1 and reward added along the path.
 
-## 5.3 The decision: [`MCTS.search`](../../splitter/mcts.py#L140)
+## 5.3 The decision: [`MCTS.search`](../../splitter/mcts.py#L116)
 
 - **The root plans are given by the agent,** with the commitment intents applied.
 - **It iterates until the deadline,** then returns the **most visited** root plan (ties broken by mean value).
@@ -47,7 +47,7 @@ The PDF requires an AI that anticipates the opponent's moves. We use **MCTS**, b
   - a single plan → returned immediately, with no search;
   - if the budget runs out before the first iteration finishes, the planner's best plan is returned.
 
-[`MCTS.root_stats`](../../splitter/mcts.py#L301) lists visits, value and tag for every root plan.
+[`MCTS.root_stats`](../../splitter/mcts.py#L225) lists visits, value and tag for every root plan.
 It is printed when the bot runs with `SPLITTER_VERBOSE=1`.
 
 ## 5.4 Speed
@@ -61,9 +61,19 @@ It is printed when the bot runs with `SPLITTER_VERBOSE=1`.
 
 ## 5.5 Evaluation constants, and removed search experiments
 
-`MCTS(ev=...)` passes the evaluation constants to every leaf evaluation; this is the only
-difference between the flagship and the backup (chapter 04.6).
+`MCTS(ev=...)` passes the evaluation constants to every leaf evaluation.
+
+**The flagship's search (Splitter-R3, chapter 16).** The backup searches exactly as described
+above. The flagship changes the leaves and the modelled opponent:
+- **race rollouts** (`rollout_policy="race"`, [`race_rollout_plan`](../../splitter/planner.py#L712)): RaceMCTS's stochastic goal policy on our exact rules, where both sides strike first from 45% (`rollout_strike`);
+- **deep rollouts in contact only** (`rollout_depth_contact=6`, [`in_contact`](../../splitter/mcts.py#L235)): 6 plies when opposing groups are within 3 cells or no humans are left, 2 elsewhere;
+- **leaf mixing** (`leaf_mix=0.5`): half the value before the rollout, half after;
+- **the desperate opponent** (`search(cfg_us=..., opp_gamble_p=...)`): when the opponent is losing, its tree plans, rollouts and the exposure term let it strike from 10%.
+
+These cost about 18% of the iterations (deep rollouts; the race policy itself was made 33% faster
+without changing a decision) and win +8.0 ± 3.9 points on fresh maps.
 
 **Removed after measurement** ([15 · Failed strategies](15_failed_strategies.md)):
 - campaign 1: search steering by the opponent model (priors at opponent nodes, PUCT; RaceMCTS −9), and the retired Splitter-HMM's risk hooks (opponent strikes in rollouts, its own strike threshold);
-- campaign 2: tree reuse between turns, a transposition cache, sequential halving at the root, a risk-aware final choice, planner rollouts and 18 opponent plans per node. Tree reuse and the cache worked mechanically (15–49% reuse hits, 15–20% cache hits) but showed no gain at 0.25 s; they are the two worth re-testing at 1.5 s (the code is in the local archive `arena/snapshots/splitter_c2/`).
+- campaign 2: sequential halving at the root, a risk-aware final choice, planner rollouts and 18 opponent plans per node;
+- campaign 3: tree reuse, the transposition cache and trusted plans, re-tested at 1.5 s: no gain; aggressive opponent replies at the first opponent layer (`opp_race`): −2.5 ± 7.6. All four were then deleted (their code is in the local snapshot `arena/snapshots/splitter_c3/`).

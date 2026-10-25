@@ -85,7 +85,7 @@ it (chapters 03 and 06).
 - **The game ends** when a species is wiped out, after `MaxPlays` plies **in total** (200 means 100 each), or when `MaxGameDuration` runs out (default 5 min). The larger total wins; equal totals mean no winner.
 
 The agent estimates the remaining plies from both the ply cap and the game clock
-([`SplitterAgent._remaining_plies`](../../splitter/agent.py#L129)).
+([`SplitterAgent._remaining_plies`](../../splitter/agent.py#L127)).
 
 ## 2.5 Our state representation: [splitter/state.py](../../splitter/state.py)
 

@@ -28,8 +28,9 @@ DISCOUNT = 0.93
 @dataclass(frozen=True)
 class EvalParams:
     """
-    The evaluation's tunable constants. Defaults = the flagship. The backup "Splitter-Calibrated"
-    uses the values fitted on game outcomes by tools/tune_eval.py (discount 0.845, k0 8.5, k1 27).
+    The evaluation's tunable constants. Both kept models use the defaults. The retired
+    "Splitter-Calibrated" (campaign 2) used values fitted on game outcomes by tools/tune_eval.py
+    (discount 0.845, k0 8.5, k1 27): no better on fresh maps (chapter 16.7).
     """
 
     discount: float = DISCOUNT     # value of a house t moves away: h * discount**t

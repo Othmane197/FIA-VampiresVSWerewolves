@@ -4,7 +4,7 @@ e.g. to watch Splitter vs Apex on the official GUI:
 
     python main.py --name Splitter 127.0.0.1 5555          # terminal 1 (our tournament bot)
     python tools/play_bot.py Apex 127.0.0.1 5555            # terminal 2
-    python tools/play_bot.py "Splitter-Calibrated" 127.0.0.1 5555 --time 1.5
+    python tools/play_bot.py "Splitter-Classic" 127.0.0.1 5555 --time 1.5
 
 Same protocol loop as main.py; the bot spec is the one used by `python -m arena.run`.
 """

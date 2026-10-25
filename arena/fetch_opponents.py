@@ -11,6 +11,7 @@ is picked up automatically, and files they deleted are removed from the copy. No
     all agree on the same Species enum and board classes;
   * their unit tests (test_*.py).
 arena/vendor/<branch>/REVISION records the commit that was copied (also returned by fetch()).
+Sparring bots a teammate later deleted are kept frozen in arena/vendor/<branch>-archive/ (ARCHIVE).
 """
 import os
 import subprocess
@@ -24,10 +25,14 @@ BRANCHES = ("Othmane", "Ronita", "Dana")
 SHARED = {"game_state.py", "game_engine.py", "network.py", "main.py", "connect.py"}
 # the files arena/opponents.py imports from each branch (a missing one is reported)
 REQUIRED = {
-    "Othmane": ["apex_agent.py", "rival_agents.py"],
-    "Ronita": ["mcts_agent.py"],
-    "Dana": ["search_agent.py", "sparring_agents.py"],
+    "Othmane": ["apex_agent.py", "ai_agent.py"],
+    "Ronita": ["mcts_agent.py", "ai_agent.py"],
+    "Dana": ["search_agent.py", "sparring_agents.py", "safe_agent.py"],
 }
+# sparring bots a teammate later deleted from the branch, kept FROZEN at the last commit that had
+# them (arena/vendor/<branch>-archive/; no network needed: the commit is in the local history).
+# Othmane removed rival_agents.py (TacticalSplitter, Greedy, ...) on 2026-10-24.
+ARCHIVE = {"Othmane": ("6535a1f", ["rival_agents.py"])}
 
 
 def _git(*args, timeout: Optional[float] = None) -> subprocess.CompletedProcess:
@@ -82,7 +87,27 @@ def fetch(do_git_fetch: bool = False, branches: Optional[Iterable[str]] = None, 
         versions[branch] = version
         warn = f"  !! missing {', '.join(version['missing'])}" if version["missing"] else ""
         log(f"  {branch:8s} @ {version['commit']} ({version['date']}) {version['subject'][:60]}{warn}")
+    archive(log)
     return versions
+
+
+def archive(log=print):
+    """Write the frozen sparring bots of ARCHIVE into arena/vendor/<branch>-archive/ (if not there yet)."""
+    for branch, (commit, files) in ARCHIVE.items():
+        dst_dir = os.path.join(VENDOR, f"{branch}-archive")
+        os.makedirs(dst_dir, exist_ok=True)
+        for f in files:
+            dst = os.path.join(dst_dir, f)
+            if os.path.exists(dst):
+                continue
+            res = subprocess.run(["git", "show", f"{commit}:{f}"], cwd=ROOT, capture_output=True, check=False)
+            if res.returncode != 0:
+                log(f"  !! archive {branch}@{commit}:{f} not found: {res.stderr.decode(errors='replace').strip()}")
+                continue
+            with open(dst, "wb") as out:
+                out.write(res.stdout)
+        with open(os.path.join(dst_dir, "REVISION"), "w") as out:
+            out.write(f"{commit} (frozen: {', '.join(files)} deleted from origin/{branch} later)\n")
 
 
 if __name__ == "__main__":

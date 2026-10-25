@@ -39,12 +39,19 @@ CPU core (no pondering, no multiprocessing in the bot), 2 s per move, Python 3.8
 | Version ladder (Elo) | 13.7.6 | Not done (`arena.history` covers the need) |
 | Opening preparation | 13.7.7 | Not done (unknown tournament maps) |
 
+## 13.0 Next steps after campaign 3
+
+The current list is [16.8](16_splitter_r.md): the R family's first-strike exposure, RaceMCTS-live,
+moving second, Apex V3, and the flagship's tempo weakness when far ahead (16.9). Of the
+campaign-2 list below, items 1 and 2 are done: the calibrated evaluation was 0.0 ± 3.1 on fresh
+maps and was retired; tree reuse and the cache gave no gain at 1.5 s and were deleted.
+
 ## 13.1 Next steps after campaign 2
 
 | # | Idea | Why |
 |---|---|---|
-| 1 | **More 1.5 s games for the backup** (calibrated evaluation), e.g. 300 games on the hold-out slots | Pooled +4.3 ± 3.6 over all stages: the only idea with a consistent mechanism; enough games could promote it to flagship |
-| 2 | **Re-test tree reuse + transposition cache at 1.5 s** (`Snap:c2:reuse=1,plan_cache=1`) | Thinking time is worth a lot at 1.5 s (−25 for half the time); these give free iterations, but were only measured at 0.25 s |
+| 1 | ~~More 1.5 s games for the backup~~ **Done in campaign 3:** 0.0 ± 3.1 on fresh maps, retired | Pooled +4.3 ± 3.6 over all stages: the only idea with a consistent mechanism; enough games could promote it to flagship |
+| 2 | ~~Re-test tree reuse + transposition cache at 1.5 s~~ **Done in campaign 3:** no gain, deleted | Thinking time is worth a lot at 1.5 s (−25 for half the time); these give free iterations, but were only measured at 0.25 s |
 | 3 | **Fit the evaluation on games from a less cautious bot** | The full fit failed because of selection bias (14.3); data from a bot that takes the risks would let the fit value the risk terms |
 | 4 | **Play other teams' bots** as soon as they are available (`py:<file>`, `tools/server_match.py`) | The only truly independent validation set |
 | 5 | **Opponent-type sampling done properly** (13.6.1): a per-iteration mixture of opponent configurations in the tree | Keeps exploration of dangerous replies, unlike the failed steering; untested |
@@ -65,17 +72,17 @@ CPU core (no pondering, no multiprocessing in the bot), 2 s per move, Python 3.8
 
 ## 13.4 Path planning
 
-1. **Paths around obstacles.** Today distance is Chebyshev and detachments follow [`straight_path`](../../splitter/planner.py#L85). Houses we cannot convert and enemy groups are obstacles (stepping on them starts a battle). A BFS distance field from each target, computed once per turn and shared by all plans, gives true distances and better goals on cluttered maps.
-2. **Space-time safe corridors.** [`detachment_safe`](../../splitter/planner.py#L135) checks only the straight path, and refuses the split if any cell of it can be intercepted. Instead, build a danger map: cell c is unsafe at step t for a detachment of k if an enemy of ≥ k can reach c within t moves. Then search a path in (cell, time) that avoids unsafe cells (A* with Chebyshev distance as the heuristic). Splits that are refused today because of one exposed cell would get a safe detour. *Test:* split rate and win rate on `villages` and `holdout`, plus the safety unit tests.
-3. **House tours.** A detachment of h converts a house and becomes 2h, which can then take a house of up to 2h. Planning a short tour (a greedy prize-collecting path over nearby houses) chooses better detachment sizes and targets than one goal at a time. The race projection already rewards snowballing ([`project_race`](../../splitter/evaluate.py#L68)), so the planner would only need to propose such tours.
+1. **Paths around obstacles.** Today distance is Chebyshev and detachments follow [`straight_path`](../../splitter/planner.py#L84). Houses we cannot convert and enemy groups are obstacles (stepping on them starts a battle). A BFS distance field from each target, computed once per turn and shared by all plans, gives true distances and better goals on cluttered maps.
+2. **Space-time safe corridors.** [`detachment_safe`](../../splitter/planner.py#L134) checks only the straight path, and refuses the split if any cell of it can be intercepted. Instead, build a danger map: cell c is unsafe at step t for a detachment of k if an enemy of ≥ k can reach c within t moves. Then search a path in (cell, time) that avoids unsafe cells (A* with Chebyshev distance as the heuristic). Splits that are refused today because of one exposed cell would get a safe detour. *Test:* split rate and win rate on `villages` and `holdout`, plus the safety unit tests.
+3. **House tours.** A detachment of h converts a house and becomes 2h, which can then take a house of up to 2h. Planning a short tour (a greedy prize-collecting path over nearby houses) chooses better detachment sizes and targets than one goal at a time. The race projection already rewards snowballing ([`project_race`](../../splitter/evaluate.py#L69)), so the planner would only need to propose such tours.
 4. **Interception instead of pursuit.** For a hunt, aim at the cell the enemy group is heading to (the `heading` feature, or its nearest convertible house) rather than where it stands now.
 
 ## 13.5 Swarm orchestration
 
-1. **Exact detachment selection.** Choosing which houses to split for is a knapsack problem: creatures available (group − reserve) against houses with value h·γ^d. Today [`_split_orders`](../../splitter/planner.py#L496) enumerates combinations of the best 5 options. A small dynamic program over the creature budget finds the best set exactly, and is cheap for groups ≤ 255.
+1. **Exact detachment selection.** Choosing which houses to split for is a knapsack problem: creatures available (group − reserve) against houses with value h·γ^d. Today [`_split_orders`](../../splitter/planner.py#L494) enumerates combinations of the best 5 options. A small dynamic program over the creature budget finds the best set exactly, and is cheap for groups ≤ 255.
 2. **Planned rendezvous.** After converting, a detachment either drifts or merges back through the `merge` goal. Choosing the meeting cell explicitly (it minimizes rejoin time plus exposure along both paths) would bring the army back together faster before a big house or a fight.
 3. **Retaliation-aware safety.** A detachment next to our main body is protected even if a bigger enemy could reach it: an attacker that wins ends up next to a group that kills it for sure. A rational opponent with lookahead will not attack. The safety check could accept such positions ("covered" detachments), allowing more splits near the main body. Risk: reckless opponents attack anyway, so this needs the hold-out proxies.
-4. **Pincer kills.** The server sums arrivals on a cell before resolving the battle (chapter 02). Two groups that are each too small to kill an enemy group for sure can do it together if their sum is ≥ 1.5× the enemy: the same mechanism as [`_pincer_orders`](../../splitter/planner.py#L564), applied to enemy groups instead of houses.
+4. **Pincer kills.** The server sums arrivals on a cell before resolving the battle (chapter 02). Two groups that are each too small to kill an enemy group for sure can do it together if their sum is ≥ 1.5× the enemy: the same mechanism as [`_pincer_orders`](../../splitter/planner.py#L562), applied to enemy groups instead of houses.
 5. **Screening.** The main body positions itself between the strongest enemy group and our detachments, so interception paths go through it. The rejected *shield* family was driven by predictions; this one is purely geometric.
 6. **Group-count control.** In lost games with 6+ groups, plans got truncated and coordination broke (chapter 03.5). A soft cap on the number of groups, or a merge bonus that grows with the group count, keeps the swarm manageable.
 
@@ -83,7 +90,7 @@ CPU core (no pondering, no multiprocessing in the bot), 2 s per move, Python 3.8
 
 1. **Sample opponent types instead of narrowing.** The steering experiment failed because it put most of the search into the "likely" replies. Instead, at the start of each MCTS iteration, sample one opponent type from the style HMM's belief (for example: careful, gambler, deathball) and use that type's settings for the whole iteration. Dangerous replies keep their share of iterations in proportion to their probability, and nothing is pruned.
 2. **Predictions in the rollouts.** Rollouts are cheap to get wrong. The archived policy HMM predicted Greedy and Starter at 92–97% (chapter 11.6); using the best-predicting expert as the opponent's rollout policy makes leaf values more realistic at no cost to tree exploration.
-3. **Calibrate the evaluation.** Plot the predicted P(win) of [`evaluate`](../../splitter/evaluate.py#L170) against actual results, from the stored traces (`--save-all-logs`). If, say, 0.7 positions are won 85% of the time, the sigmoid is too flat. Calibration errors show which stage of the evaluation is wrong.
+3. **Calibrate the evaluation.** Plot the predicted P(win) of [`evaluate`](../../splitter/evaluate.py#L171) against actual results, from the stored traces (`--save-all-logs`). If, say, 0.7 positions are won 85% of the time, the sigmoid is too flat. Calibration errors show which stage of the evaluation is wrong.
 
 ## 13.7 Other unexplored areas
 
