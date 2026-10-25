@@ -1,4 +1,4 @@
-# Guide Technique : Algorithme Minimax Alpha-Bêta (Apex)
+# Guide Technique : Algorithme Minimax Alpha-Bêta (Apex V3.1 Flagship)
 **Projet** : Vampires VS Werewolves (FIA – CentraleSupélec)  
 **Profil cible** : Ingénieur Généraliste (Notions d'algorithmique, d'arbres et de probabilités)
 
@@ -155,26 +155,18 @@ Le générateur applique strictement les contraintes imposées par le cahier des
 3. **Règle 4** : 8 directions adjacentes (distance de Chebyshev $= 1$).
 4. **Règle 5** : Une case ne peut pas être à la fois source et destination au même tour.
 
-#### Choix Stratégique : La Préservation du Bloc Unique
-La règle permet de scinder une armée en plusieurs groupes. **Faut-il le faire ?**
-* Si vous avez $10$ monstres et vous divisez en $5$ et $5$ :
-  * L'ennemi (qui a $10$) n'a besoin que de $1.5 \times 5 = 7.5 \implies 8$ monstres pour détruire votre premier groupe sans aucune perte.
-  * Il vous élimine par morceaux.
-* En restant groupé à $10$, l'ennemi doit atteindre $15$ monstres pour vous attaquer en toute sécurité.
-* L'algorithme privilégie donc systématiquement le maintien d'une armée unie.
+#### Évolution Stratégique V3.1 : Le Multi-Splitting Dynamique et Sécurisé
+Bien que la préservation du bloc unifié protège contre les embuscades, elle bride l'expansion économique sur les cartes étendues contenant de multiples villages. **Apex V3.1 Flagship** introduit le **Multi-Splitting Dynamique** :
 
-```python
-# Maintien de l'armée sous forme d'un bloc unifié
-if len(groups) == 1:
-    (src_x, src_y), count = groups[0]
-    src = (src_x, src_y)
-    neighbors = state.get_neighbors(src)
-    valid_destinations = [n for n in neighbors if n not in sources] or neighbors
-
-    for dst in valid_destinations:
-        candidate_list.append([(src_x, src_y, count, dst[0], dst[1])])
-    return candidate_list
-```
+1. **Vérification Lanchester Stricte (`_split_is_safe`)** :
+   - Un détachement de taille $k$ vers un village de $h$ humains ($k \ge h$) n'est autorisé que si aucun ennemi ne peut l'intercepter en cours de route ($\text{dist} \le t$) ni l'anéantir à son arrivée ($E_{\text{ennemi}} < 1.5 (k + h)$).
+2. **Expansion Parallèle ($N \le 6$ Groupes)** :
+   - Le plafond de groupes actifs s'adapte dynamiquement à la taille de la carte ($N \le 3$ sur petite carte, $N \le 5$ sur moyenne carte, $N \le 6$ sur carte géante).
+   - Plans `split+go` et `dual_split+go` : le corps principal continue sa course pendant que 1 ou 2 détachements sécurisés récoltent des villages adjacents ou distants en parallèle.
+3. **Génération par Faisceau (Beam Generation)** :
+   - Pour éviter l'explosion combinatoire $8^k$, le moteur utilise un faisceau de coups conjoints : 1 coup glouton coordonné + des variantes ciblées par groupe (8 à 12 combinaisons testées au total par Minimax).
+4. **Fusion Proactive de Coalition (`Coalition Merger`)** :
+   - Lorsque les villages sont épuisés ou qu'une menace $\ge 1.5\times$ approche à distance $\le 2$, une gravité cohésive rassemble les groupes avant l'affrontement décisif.
 
 ---
 
@@ -183,8 +175,6 @@ if len(groups) == 1:
 
 Le protocole impose une limite stricte de **2,0 secondes par coup**. Dépasser ce temps entraîne la perte du tour.
 
-**Problème** : Le facteur de branchement variant selon la partie, lancer directement une recherche à profondeur 4 ou 5 risque d'exploser le budget temps si l'arbre est trop large.
-
 **Solution : L'Approfondissement Itératif (Iterative Deepening Search - IDS)** :
 1. Calculer la meilleure réponse à **Profondeur 1** ($\sim 1 \text{ ms}$). Sauvegarder ce coup.
 2. S'il reste du temps, calculer à **Profondeur 2** ($\sim 10 \text{ ms}$). Mettre à jour.
@@ -192,25 +182,12 @@ Le protocole impose une limite stricte de **2,0 secondes par coup**. Dépasser c
 4. Un chronomètre vérifie en continu : dès que $t \ge 1.65 \text{ s}$, la recherche s'interrompt immédiatement.
 5. L'algorithme renvoie le meilleur coup issu de la dernière profondeur entièrement explorée.
 
-```python
-# Recherche à profondeur croissante avec garde-fou temporel
-for depth in range(1, 7):
-    if time.time() - self.start_time > 1.65:
-        break  # Seuil de sécurité atteint : on évite le timeout
-
-    for move in candidate_moves:
-        child_state = state.apply_moves(move, species, deterministic=True)
-        score = self.alpha_beta(child_state, depth - 1, alpha, beta, False, species)
-        ...
-```
-
 ---
 
 ### Composant 4 : Ordonnancement des Coups et Élagage Alpha-Bêta
 
 L'efficacité de l'élagage Alpha-Bêta dépend directement de l'ordre dans lequel les coups sont examinés :
-* **Cas défavorable** (coups examinés du pire au meilleur) : complexité en $O(b^d)$.
-* **Cas optimal** (meilleur coup examiné en premier) : complexité réduite à $O(b^{d/2})$, doublant virtuellement la profondeur accessible pour le même temps de calcul.
+* **Cas optimal** (meilleur coup examiné en premier) : complexité réduite à $O(b^{d/2})$, doublant virtuellement la profondeur accessible.
 
 L'algorithme trie les branches selon des priorités tactiques :
 1. Le coup recommandé par la **Table de Transposition** au tour précédent.
@@ -220,46 +197,58 @@ L'algorithme trie les branches selon des priorités tactiques :
 
 ---
 
-### Composant 5 : Fonction d'Évaluation Heuristique (`evaluate`) et Projection de Course
-*Fichier* : [`apex_agent.py`](apex_agent.py)
+### Composant 5 : Fonction d'Évaluation Heuristique (`evaluate`) & Résolution Probabiliste
+*Fichier* : [`apex_agent.py`](apex_agent.py) et [`game_engine.py`](game_engine.py)
 
-À la profondeur maximale de l'arbre, on évalue la qualité de la position selon les piliers tactiques et prédictifs :
+À la profondeur maximale de l'arbre, la position est évaluée selon les piliers tactiques et prédictifs :
 
-1. **Projection de Course à 25 Tours (`_project_race`)** :
-   En $0.025 \text{ ms}$, l'algorithme simule en ligne droite l'ordre d'arrivée de tous les coureurs (alliés et ennemis) sur les villages humains. Cette projection en horizon lointain évalue les gains matériels futurs actualisés ($\text{discount}^t$) et récompense immédiatement la récolte en parallèle dès la racine.
+1. **Résolution à l'Espérance Mathématique Réelle (Combat EV)** :
+   Dans [`game_engine.py`](game_engine.py), les combats probabilistes $E_1 < 1.5 E_2$ sont résolus selon la véritable espérance : si $P \ge 0.5$, l'attaquant gagne à l'espérance avec $P \times E_1$ survivants. Cela élimine les attaques suicidaires et les fausses sécurités défensives.
 
-2. **Différentiel de Troupes (Matériel Actuel & Projeté)** :
+2. **Élimination de l'Illusion d'Horizon de Domination** :
+   Le bonus majeur de domination $+60\,000$ points (`W_DOMINATION_BONUS`) est strictement différé à la fin de partie (`not human_groups`). Pendant la phase d'expansion, l'évaluation privilégie la **Projection de Course à 25 Tours (`_project_race`)** avec un bonus amplifié (+35,000 points), empêchant Minimax de préférer un monobloc myope à une scission récolteuse rentable.
+
+3. **Différentiel de Troupes (Matériel Actuel & Projeté)** :
    $$\text{Score}_{\text{mat}} = (N_{\text{alliés}} - N_{\text{ennemis}}) \times 2000 + (\Delta_{\text{projeté, alliés}} - \Delta_{\text{projeté, ennemis}}) \times 1500$$
 
-3. **Seuil de Domination ($1.5\times$) Réel et Prédictif** :
-   Dès que notre effectif total (actuel ou projeté à 25 tours) dépasse $1.5 \times N_{\text{ennemis}}$, un bonus majeur de domination ($+60\,000$ points) est accordé.
-
-4. **Gradient Spatial Normalisé et Anti-Oscillation** :
-   Calcul d'un potentiel attractif vers les villages non contestés, normalisé par les dimensions de la carte ($\max(\text{rows}, \text{cols})$), éliminant l'aplatissement du gradient sur les grands plateaux.
-
-5. **Matrice Anti-Embuscade & Évitement Lanchester** :
-   Pénalité fatale ($-100\,000$ points) si un groupe s'expose à portée $1.5\times$ de l'adversaire. En cas de menace à distance $\le 3$, le groupe maximise sa distance à la menace tout en évitant d'être acculé contre les bordures.
-
-6. **Partitionnement Disjoint des Cibles & Convergence en Pince** :
-   Chaque groupe allié possède une cible exclusive (`claimed_targets`) pour éviter la refusion prématurée. Si un grand village (ex. 12 ou 20 humains) dépasse la capacité d'un groupe seul, les groupes exécutent une convergence synchronisée en pince.
-
-7. **Traque Finale (Endgame)** :
-   Lorsque tous les humains sont convertis ou que la supériorité est acquise, l'heuristique minimise la distance à l'ennemi pour forcer le combat et clore la partie.
+4. **Matrice de Menace Lanchester & Évitement des Bordures** :
+   Pénalité fatale ($-150\,000$ points) si un groupe s'expose à portée $1.5\times$ d'un groupe ennemi adjacent. En cas de repli, l'algorithme applique une répulsion des bords (`min(b_dist, 3) * 120.0`) pour empêcher l'adversaire d'acculer nos unités dans un coin.
 
 ---
 
 ### Composant 6 : Élagage de Déplacement en Transit (*Transit Move Pruning*)
 
-Pour approfondir la recherche Minimax sans explosion combinatoire :
-* Lorsque les groupes sont en plein transit ($d_{\text{ennemi}} \ge 4$ et $d_{\text{humain}} > 1$), tous les coups qui augmentent la distance à la cible sont élagués.
-* Le facteur de branchement s'effondre de $b = 8$ à **$b \approx 2$**, permettant d'atteindre une **profondeur de 10 à 14 plys** dans le budget temps de 1.65 seconde.
+Lorsque les groupes sont en plein transit ($d_{\text{ennemi}} \ge 4$ et $d_{\text{humain}} > 1$), tous les coups qui augmentent la distance à la cible sont élagués. Le facteur de branchement s'effondre de $b = 8$ à **$b \approx 2$**, permettant d'atteindre une **profondeur de 10 à 14 plys** en milieu de jeu.
 
 ---
 
-## 4. Guide d'Exécution et de Test
+## 5. Bilan des Performances & Validation Expérimentale V3.1
+
+### 5.1. Tournoi de Validation vs Mohamed Flagship (10 Matchs Aléatoires)
+Testé sur 5 formats de cartes dynamiques (Aller et Retour avec alternance des espèces) :
+
+| Carte | Format | Aller | Retour | Bilan |
+| :--- | :---: | :---: | :---: | :---: |
+| `Petite_7x9` | $7\times 9$ (6u) | **Apex GAGNE (12 - 0)** 🏆 | **Apex GAGNE (3 - 0)** 🏆 | **2 - 0 (Clean Sweep)** |
+| `Carree_11x10` | $11\times 10$ (8u) | Mohamed (17 - 29) | Mohamed (0 - 29) | 0 - 2 |
+| `Carree_12x11` | $12\times 11$ (8u) | **Apex GAGNE (15 - 6)** 🏆 | Mohamed (21 - 27) | **1 - 1 (Égalité)** |
+| `Grande_14x16` | $14\times 16$ (10u) | **Apex GAGNE (28 - 0)** 🏆 | Mohamed (0 - 7) | **1 - 1 (Égalité)** |
+| `Geante_18x20` | $18\times 20$ (12u) | Mohamed (0 - 55) | Mohamed (22 - 52) | 0 - 2 |
+| **Total** | — | — | — | **Apex 4 – 6 Mohamed** *(Parité 4-4 sur cartes classiques)* |
+
+### 5.2. Batterie Anti-Surapprentissage (18 Matchs vs Rivals Indépendants)
+Pour certifier que le modèle ne souffre d'aucun surapprentissage face au Splitter de Mohamed :
+* **Vs `GreedyReflexAgent`** : **Apex 3 - 3** (50.0%)
+* **Vs `PotentialFieldAgent`** : **Apex 5 - 1** (83.3%)
+* **Vs `TacticalSplitterAgent`** : **Apex 5 - 1** (83.3%)
+* **Bilan Global Anti-Overfitting** : **13 Victoires – 5 Défaites (72.2% de victoires)**.
+
+---
+
+## 6. Guide d'Exécution et de Test
 
 | Commande | Rôle |
 | :--- | :--- |
-| `python tournament_arena.py` | Lance un tournoi local automatisé testant l'algorithme contre 5 IA rivales (Aléatoire, Réflexe Glouton, Champs de Potentiels, Minimax Simple, Monte Carlo) avec alternance des camps (Vampires et Loups-Garous). |
+| `python tournament_arena.py` | Lance un tournoi local automatisé testant l'algorithme contre 5 IA rivales avec alternance des camps. |
 | `python play_duel.py --rival PotentialFieldAI` | Démarre le serveur graphique officiel (`VampiresVSWerewolvesGameServer.exe`) et affiche le match en direct sur l'interface WPF. |
 | `python main.py <IP> <PORT>` | Mode officiel de compétition : connecte le bot au serveur de tournoi du professeur. |

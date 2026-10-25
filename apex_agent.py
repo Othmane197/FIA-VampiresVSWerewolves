@@ -1,22 +1,18 @@
 """
-Apex Alpha-Beta Minimax Agent (CentraleSupélec FIA Project) - Version V3 Flagship
+Apex Alpha-Beta Minimax Agent (CentraleSupélec FIA Project) - Version V3.1 Flagship
 Author: Pair programming with Google Antigravity
 
 Architecture & Innovations:
 - Iterative Deepening Alpha-Beta Search (IDS) with strict time budgeting (<1.65s per ply)
 - Custom Transposition Table with fast 64-bit Zobrist state hashing
-- 25-Ply Lookahead Race Projection (_project_race):
-  * Simulates forward village captures 25 plies into the future in closed form (< 0.03 ms)
-  * Seamlessly rewards parallel split foraging without requiring astronomical tree depth
-- Transit Move Pruning (Move Skipping for Deep Search):
-  * In transit (no enemy within distance 4, no human adjacent), prunes backward/sideways moves
-  * Collapses branching factor from b=8 to b~2, enabling Alpha-Beta depth of 10 to 14+ plies
-- Target Partitioning (Claimed Targets):
-  * Enforces disjoint village assignments across friendly groups to prevent collision/merging
-- Pincer Convergence:
-  * Synchronized convergence on high-value settlements when a single detachment is insufficient
-- Lanchester Threat Evasion:
-  * Vectorial flee mechanics maximizing distance to superior enemies while steering away from borders
+- Dynamic Multi-Splitting (Up to 3-4 parallel detachments on large maps with path-safe interception checks)
+- Combinatorial Beam Move Generation: Restores full Alpha-Beta search depth and branching for 3+ groups
+- Proactive Coalition Regrouping & Gravitational Merger: Prevents late-game isolation and consolidates power
+- Calculated Opportunistic Combat: Early neutralization of rival detachments at 65%+ odds (1.25x ratio)
+- 25-Ply Lookahead Race Projection (_project_race): Simulates forward village captures up to 25 plies in closed form
+- Transit Move Pruning: In transit, collapses branching factor enabling deep search
+- Target Partitioning: Disjoint village assignments preventing friendly collisions
+- Pincer Convergence & Lanchester Threat Evasion: Synchronized convergence and vectorial flee mechanics
 - Strategic Move Ordering (Transposition best move -> 1.5x kills -> safe splits -> safe conversions)
 - 100% self-contained: Pure Python standard library, zero external AI/graph/tree dependencies
 """
@@ -142,7 +138,7 @@ class ApexAlphaBetaAgent:
     def _split_is_safe(self, src: Tuple[int, int], count: int, detachment: int,
                        target: Tuple[int, int], humans: Dict[Tuple[int, int], int],
                        enemies: List[Tuple[Tuple[int, int], int]]) -> bool:
-        """Enhanced Lanchester-safe check: accounts for potential enemy growth on the way."""
+        """Enhanced Lanchester-safe check: verifies path interception and arrival safety."""
         h = humans.get(target, 0)
         path = self._straight_path(src, target)
         distance = len(path)
@@ -151,22 +147,22 @@ class ApexAlphaBetaAgent:
 
         for enemy_pos, enemy_count in enemies:
             enemy_distance = chebyshev_dist(enemy_pos, target)
-            pot_enemy = enemy_count
-            for hp, hc in humans.items():
-                if chebyshev_dist(enemy_pos, hp) <= distance and enemy_count >= hc:
-                    pot_enemy = max(pot_enemy, enemy_count + hc)
-
+            # Direct race: if an enemy can reach the target strictly before us and convert it
             if enemy_count >= h and enemy_distance < distance:
                 return False
 
+            # Ambush along our travel path: if an enemy is close enough to intercept the detachment
             if enemy_count >= detachment:
                 for step, cell in enumerate(path[:-1], start=1):
                     if chebyshev_dist(enemy_pos, cell) <= step:
                         return False
+
+            # Post-conversion vulnerability: if an enemy group can reach the converted village
+            # within 1 turn and wipe it out
             converted = detachment + h
-            if enemy_distance <= distance and pot_enemy >= converted:
+            if enemy_distance <= distance and enemy_count >= converted:
                 return False
-            if enemy_distance <= distance + 2 and pot_enemy >= 1.5 * converted:
+            if enemy_distance <= distance + 1 and enemy_count >= 1.5 * converted:
                 return False
 
         return True
@@ -176,83 +172,120 @@ class ApexAlphaBetaAgent:
                             enemies: List[Tuple[Tuple[int, int], int]],
                             human_groups: List[Tuple[Tuple[int, int], int]],
                             candidates: List[List[Tuple[int, int, int, int, int]]]):
-        """Add safe parallel-foraging split plans (allowed for up to 2 active groups)."""
-        if len(groups) > 2 or not human_groups:
+        """Add safe parallel-foraging split plans (dynamic up to 5-6 active groups on large maps)."""
+        max_dim = max(state.rows, state.cols)
+        max_allowed_groups = 6 if max_dim >= 16 else (5 if max_dim >= 11 else 3)
+        if len(groups) >= max_allowed_groups or not human_groups:
             return
 
         sorted_groups = sorted(groups, key=lambda g: g[1], reverse=True)
-        src, count = sorted_groups[0]
-        if count < 8 and len(groups) > 1:
-            return
-        if count < 4:
-            return
+        # Allow checking top eligible groups for possible detachment splits
+        eligible_groups = sorted_groups[:3] if len(groups) >= 3 else sorted_groups
 
         enemy_counts = enemies
-        reserve = max(3, int(0.35 * count))
-        for enemy_pos, enemy_count in enemy_counts:
-            d_ene = chebyshev_dist(src, enemy_pos)
-            if d_ene <= 3:
-                reserve = max(reserve, enemy_count + 1)
-            elif d_ene <= 5:
-                reserve = max(reserve, int(0.7 * enemy_count))
 
-        options = []
-        for target, humans in human_groups:
-            distance = chebyshev_dist(src, target)
-            if humans <= 0 or humans > 255 or distance <= 1:
+        for src, count in eligible_groups:
+            if count < 4:
                 continue
-            first_steps = [cell for cell in state.get_neighbors(src)
-                           if chebyshev_dist(cell, target) == distance - 1]
-            safe_steps = [cell for cell in first_steps
-                          if state.get_cell(cell)[0] <= humans
-                          and not any(chebyshev_dist(enemy_pos, cell) == 1
-                                      and enemy_count >= humans
-                                      for enemy_pos, enemy_count in enemy_counts)]
-            if not safe_steps:
-                continue
-            for detachment in (humans, humans + 1):
-                if (detachment <= 0 or detachment > count - reserve
-                        or detachment + humans > 255):
+
+            # Strategic threshold: if there is a major prize (H >= 5) closer to us than the enemy,
+            # do not split if the split would leave our main body too small to claim that prize!
+            large_contested = [hc for hp, hc in human_groups if hc >= 5 and chebyshev_dist(src, hp) <= min((chebyshev_dist(ep, hp) for ep, _ in enemy_counts), default=99)]
+            if large_contested:
+                needed = max(large_contested)
+                if count < needed + 2 and count < 12:
                     continue
-                if self._split_is_safe(src, count, detachment, target,
-                                       dict(human_groups), enemy_counts):
-                    value = humans / ((distance + 1.0) * detachment)
-                    options.append((value, target, detachment))
-                    break
 
-        if not options:
-            return
+            reserve = max(2, int(0.25 * count))
+            for enemy_pos, enemy_count in enemy_counts:
+                d_ene = chebyshev_dist(src, enemy_pos)
+                if d_ene <= 2:
+                    reserve = max(reserve, enemy_count + 1)
+                elif d_ene == 3:
+                    reserve = max(reserve, int(0.8 * enemy_count))
 
-        options.sort(key=lambda item: item[0], reverse=True)
-        options = options[:3]
+            options = []
+            for target, humans in human_groups:
+                distance = chebyshev_dist(src, target)
+                if humans <= 0 or humans > 255 or distance < 1:
+                    continue
+                first_steps = [cell for cell in state.get_neighbors(src)
+                               if chebyshev_dist(cell, target) == distance - 1]
+                safe_steps = [cell for cell in first_steps
+                              if state.get_cell(cell)[0] <= humans
+                              and not any(chebyshev_dist(enemy_pos, cell) == 1
+                                          and enemy_count >= humans
+                                          for enemy_pos, enemy_count in enemy_counts)]
+                if not safe_steps:
+                    continue
+                for detachment in (humans, humans + 1):
+                    if (detachment <= 0 or detachment > count - reserve
+                            or detachment + humans > 255):
+                        continue
+                    if self._split_is_safe(src, count, detachment, target,
+                                           dict(human_groups), enemy_counts):
+                        value = humans / ((distance + 1.0) * detachment)
+                        steps = [cell for cell in state.get_neighbors(src)
+                                 if chebyshev_dist(cell, target) == distance - 1
+                                 and state.get_cell(cell)[0] <= detachment
+                                 and not any(chebyshev_dist(enemy_pos, cell) == 1 and enemy_count >= detachment
+                                             for enemy_pos, enemy_count in enemy_counts)]
+                        if steps:
+                            options.append((value, target, detachment, steps[0]))
+                        break
 
-        for _, target, units in options:
-            if count - units < reserve:
+            if not options:
                 continue
-            steps = [cell for cell in state.get_neighbors(src)
-                     if chebyshev_dist(cell, target) == chebyshev_dist(src, target) - 1
-                     and state.get_cell(cell)[0] <= units
-                     and not any(chebyshev_dist(enemy_pos, cell) == 1 and enemy_count >= units
-                                 for enemy_pos, enemy_count in enemy_counts)]
-            if not steps:
-                continue
-            step = steps[0]
-            detachment_move = (src[0], src[1], units, step[0], step[1])
 
-            if len(groups) == 1:
-                moves = [detachment_move]
-            else:
-                other_groups = [g for g in groups if g[0] != src]
-                moves = [detachment_move]
-                for (og_x, og_y), og_cnt in other_groups:
-                    og_neighbors = state.get_neighbors((og_x, og_y))
-                    og_valid = [n for n in og_neighbors if n != src and n != step] or og_neighbors
-                    best_og_step = min(og_valid, key=lambda n: min((chebyshev_dist(n, hp) for hp, hc in human_groups if og_cnt >= hc), default=99))
-                    moves.append((og_x, og_y, og_cnt, best_og_step[0], best_og_step[1]))
+            options.sort(key=lambda item: item[0], reverse=True)
 
-            ok, _ = state.validate_moves(moves, species)
-            if ok and moves not in candidates:
-                candidates.append(moves)
+            other_groups = [g for g in groups if g[0] != src]
+            other_moves = []
+            for (og_x, og_y), og_cnt in other_groups:
+                og_neighbors = state.get_neighbors((og_x, og_y))
+                og_valid = [n for n in og_neighbors if n != src] or og_neighbors
+                best_og = min(og_valid, key=lambda n: min((chebyshev_dist(n, hp) for hp, hc in human_groups if og_cnt >= hc), default=99))
+                other_moves.append((og_x, og_y, og_cnt, best_og[0], best_og[1]))
+
+            # Plan A: Dual Split + Go (Two parallel detachments + optional remainder)
+            if len(options) >= 2:
+                for i in range(min(3, len(options))):
+                    for j in range(i + 1, min(i + 4, len(options))):
+                        _, t1, u1, s1 = options[i]
+                        _, t2, u2, s2 = options[j]
+                        if s1 != s2 and count >= u1 + u2:
+                            rem = count - u1 - u2
+                            if rem == 0:
+                                moves_dual = [(src[0], src[1], u1, s1[0], s1[1]), (src[0], src[1], u2, s2[0], s2[1])] + other_moves
+                                ok, _ = state.validate_moves(moves_dual, species)
+                                if ok and moves_dual not in candidates:
+                                    candidates.append(moves_dual)
+                            elif rem >= 2 and rem >= reserve:
+                                rem_steps = [n for n in state.get_neighbors(src) if n != s1 and n != s2]
+                                if rem_steps:
+                                    s_rem = rem_steps[0]
+                                    moves_3way = [(src[0], src[1], u1, s1[0], s1[1]), (src[0], src[1], u2, s2[0], s2[1]), (src[0], src[1], rem, s_rem[0], s_rem[1])] + other_moves
+                                    ok, _ = state.validate_moves(moves_3way, species)
+                                    if ok and moves_3way not in candidates:
+                                        candidates.append(moves_3way)
+
+            # Plan B: Single Split + Main Body Movement (Split 1 + Go)
+            for _, target, units, step in options[:2]:
+                if count - units < reserve:
+                    continue
+                rem = count - units
+                if rem > 0:
+                    rem_neighbors = [n for n in state.get_neighbors(src) if n != step]
+                    if rem_neighbors:
+                        # Direct remainder towards the best secondary target or safe space
+                        best_rem_step = min(rem_neighbors, key=lambda n: min((chebyshev_dist(n, hp) for hp, hc in human_groups if hp != target and rem >= hc), default=99))
+                        moves_split_go = [
+                            (src[0], src[1], units, step[0], step[1]),
+                            (src[0], src[1], rem, best_rem_step[0], best_rem_step[1])
+                        ] + other_moves
+                        ok, _ = state.validate_moves(moves_split_go, species)
+                        if ok and moves_split_go not in candidates:
+                            candidates.append(moves_split_go)
 
     def compute_hash(self, state: BoardState, active_species: Species) -> int:
         h = 0x84222325CBBF484F
@@ -297,12 +330,18 @@ class ApexAlphaBetaAgent:
             split_candidates = []
             self._append_split_plans(state, species, groups, enemy_groups, human_groups, split_candidates)
 
+            def race_priority(item):
+                hp, hc = item
+                d_us = chebyshev_dist(src, hp)
+                closer_enemies = [chebyshev_dist(ep, hp) for ep, ec in enemy_groups if ec >= hc and chebyshev_dist(ep, hp) < d_us]
+                return (1 if closer_enemies else 0, d_us, -hc)
+
             # In transit, directional filtering (pruning moves that move away from targets)
             if in_transit:
                 safe_humans = [(h_pos, h_cnt) for h_pos, h_cnt in human_groups if count >= h_cnt]
                 target = None
                 if safe_humans:
-                    target, _ = min(safe_humans, key=lambda item: chebyshev_dist(src, item[0]))
+                    target = min(safe_humans, key=race_priority)[0]
                 elif enemy_groups:
                     target, _ = min(enemy_groups, key=lambda item: chebyshev_dist(src, item[0]))
 
@@ -336,13 +375,18 @@ class ApexAlphaBetaAgent:
             threat_enemies = [(e_pos, e_cnt) for e_pos, e_cnt in enemy_groups
                               if chebyshev_dist(src, e_pos) <= 3 and e_cnt >= count]
 
-            # TARGET PARTITIONING: only pick UNCLAIMED humans
+            def group_race_priority(item):
+                hp, hc = item
+                d_us = chebyshev_dist(src, hp)
+                closer_enemies = [chebyshev_dist(ep, hp) for ep, ec in enemy_groups if ec >= hc and chebyshev_dist(ep, hp) < d_us]
+                return (1 if closer_enemies else 0, d_us, -hc)
+
+            # TARGET PARTITIONING: only pick UNCLAIMED humans prioritizing winnable races
             accessible_humans = [(h_pos, h_cnt) for h_pos, h_cnt in all_safe_humans
                                  if count >= h_cnt and h_pos not in claimed_targets]
             best_human = None
             if accessible_humans:
-                best_human = min(accessible_humans,
-                                 key=lambda item: (chebyshev_dist(src, item[0]), -item[1]))[0]
+                best_human = min(accessible_humans, key=group_race_priority)[0]
                 claimed_targets.add(best_human)
 
             # PINCER CONVERGENCE: If no single group is big enough for any human,
@@ -362,31 +406,50 @@ class ApexAlphaBetaAgent:
                 th, tv, tw = state.get_cell(dst)
                 ene_cnt = tw if species == Species.VAMPIRE else tv
 
-                if ene_cnt > 0 and count >= 1.5 * ene_cnt:
-                    val += 2500.0
+                # 1. Direct Combat Valuation
+                if ene_cnt > 0:
+                    if count >= 1.5 * ene_cnt:
+                        val += 3500.0   # Decisive 1.5x kill
+                    elif count >= 1.25 * ene_cnt:
+                        val += 2000.0   # 65%+ favorable strike
+                    elif count > ene_cnt:
+                        val += 500.0    # Slight material edge
+                    else:
+                        val -= 15000.0  # Unfavorable attack
                 elif th > 0 and count >= th:
-                    val += 1500.0
+                    val += 1800.0 + th * 200.0  # Village conversion scaled by size
 
+                # 2. Local Threat Proximity
                 for e_pos, e_cnt in enemy_groups:
                     d_e = chebyshev_dist(dst, e_pos)
-                    if d_e == 1 and e_cnt >= 1.5 * count:
-                        val -= 100000.0
-                    elif d_e == 1 and e_cnt > count:
-                        val -= 20000.0
+                    if d_e == 1:
+                        if e_cnt >= 1.5 * count:
+                            val -= 100000.0  # Lethal counter-attack cell
+                        elif e_cnt > count:
+                            val -= 25000.0   # Disadvantaged cell
+                        elif e_cnt >= 0.8 * count:
+                            val -= 4000.0    # Unnecessary 50-50 contact
 
-                if threat_enemies:
-                    min_t_d = min(chebyshev_dist(dst, ep) for ep, _ in threat_enemies)
-                    val += min_t_d * 500.0  # Vectorial flee mechanics
-                    b_dist = min(dst[0], state.cols - 1 - dst[0], dst[1], state.rows - 1 - dst[1])
-                    val += min(b_dist, 2) * 80.0 # Border trap avoidance
-                    if closest_friend:
-                        val -= chebyshev_dist(dst, closest_friend) * 30.0
-                elif best_human:
-                    val -= chebyshev_dist(dst, best_human) * 60.0
+                # 3. Macro Objectives & Navigation
+                # A. Target Pull (Human Village or Pincer)
+                if best_human:
+                    val -= chebyshev_dist(dst, best_human) * 120.0
                 elif pincer_target:
-                    val -= chebyshev_dist(dst, pincer_target) * 80.0  # Synchronized convergence
-                elif closest_friend:
-                    val -= chebyshev_dist(dst, closest_friend) * 40.0
+                    val -= chebyshev_dist(dst, pincer_target) * 80.0
+
+                # B. Immediate Tactical Threat Evasion (Threats within Chebyshev <= 2)
+                immediate_threats = [(ep, ec) for ep, ec in threat_enemies if chebyshev_dist(src, ep) <= 2]
+                if immediate_threats:
+                    min_t_d = min(chebyshev_dist(dst, ep) for ep, _ in immediate_threats)
+                    val += min_t_d * 300.0  # Open-space spacing away from immediate threat
+                    b_dist = min(dst[0], state.cols - 1 - dst[0], dst[1], state.rows - 1 - dst[1])
+                    val += min(b_dist, 3) * 120.0  # Strong border trap avoidance
+
+                # C. Coalition Merger Gravitation (Only when foraging complete or actively threatened by >= 1.5x nearby)
+                if closest_friend:
+                    need_merge = (not accessible_humans) or (immediate_threats and any(ec >= 1.5 * count for _, ec in immediate_threats) and len(groups) > 1)
+                    if need_merge:
+                        val -= chebyshev_dist(dst, closest_friend) * 60.0
 
                 return val
 
@@ -394,22 +457,50 @@ class ApexAlphaBetaAgent:
             sorted_dsts = sorted(valid_dsts, key=step_score, reverse=True)[:k_opts]
             group_options.append([((src_x, src_y), count, d) for d in sorted_dsts])
 
+        # Always check for potential tactical splits from capable groups
+        self._append_split_plans(state, species, sorted_groups, enemy_groups, human_groups, candidate_list)
+
         if len(group_options) == 2:
-            self._append_split_plans(state, species, sorted_groups, enemy_groups, human_groups, candidate_list)
             for opt1 in group_options[0]:
                 for opt2 in group_options[1]:
                     candidate_list.append([
                         (opt1[0][0], opt1[0][1], opt1[1], opt1[2][0], opt1[2][1]),
                         (opt2[0][0], opt2[0][1], opt2[1], opt2[2][0], opt2[2][1])
                     ])
+        elif len(group_options) == 3:
+            greedy = [(opts[0][0][0], opts[0][0][1], opts[0][1], opts[0][2][0], opts[0][2][1]) for opts in group_options]
+            candidate_list.append(greedy)
+            for i in range(len(group_options)):
+                if len(group_options[i]) > 1:
+                    variant = list(greedy)
+                    alt = group_options[i][1]
+                    variant[i] = (alt[0][0], alt[0][1], alt[1], alt[2][0], alt[2][1])
+                    candidate_list.append(variant)
+            if len(group_options[0]) > 1 and len(group_options[1]) > 1:
+                alt0 = group_options[0][1]
+                alt1 = group_options[1][1]
+                g2 = list(greedy)
+                g2[0] = (alt0[0][0], alt0[0][1], alt0[1], alt0[2][0], alt0[2][1])
+                g2[1] = (alt1[0][0], alt1[0][1], alt1[1], alt1[2][0], alt1[2][1])
+                candidate_list.append(g2)
         else:
-            combined = []
-            for opts in group_options:
-                best = opts[0]
-                combined.append((best[0][0], best[0][1], best[1], best[2][0], best[2][1]))
-            candidate_list.append(combined)
+            greedy = [(opts[0][0][0], opts[0][0][1], opts[0][1], opts[0][2][0], opts[0][2][1]) for opts in group_options]
+            candidate_list.append(greedy)
+            for i in range(min(3, len(group_options))):
+                if len(group_options[i]) > 1:
+                    variant = list(greedy)
+                    alt = group_options[i][1]
+                    variant[i] = (alt[0][0], alt[0][1], alt[1], alt[2][0], alt[2][1])
+                    candidate_list.append(variant)
 
-        return candidate_list
+        # Validate and deduplicate candidates
+        valid_candidates = []
+        for moves in candidate_list:
+            ok, _ = state.validate_moves(moves, species)
+            if ok and moves not in valid_candidates:
+                valid_candidates.append(moves)
+
+        return valid_candidates
 
     # ---------------------------------------------------------
     # Evaluation Function (Tactical Fields + 25-Ply Projection)
@@ -428,18 +519,26 @@ class ApexAlphaBetaAgent:
 
         score = 0.0
 
+        our_groups = state.get_species_groups(our_species)
+        enemy_groups = state.get_species_groups(enemy_species)
+        human_groups = state.get_humans()
+
         # 1. Material Advantage & 1.5x Domination Threshold
         mat_diff = our_total - ene_total
         score += mat_diff * W_MATERIAL
 
-        if our_total >= 1.5 * ene_total:
-            score += W_DOMINATION_BONUS + (our_total - 1.5 * ene_total) * 1000.0
-        elif ene_total >= 1.5 * our_total:
-            score -= W_DOMINATION_BONUS + (ene_total - 1.5 * our_total) * 1000.0
-
-        our_groups = state.get_species_groups(our_species)
-        enemy_groups = state.get_species_groups(enemy_species)
-        human_groups = state.get_humans()
+        if not human_groups:
+            # Endgame / terminal domination: no humans left to alter balance
+            if our_total >= 1.5 * ene_total:
+                score += W_DOMINATION_BONUS + (our_total - 1.5 * ene_total) * 1000.0
+            elif ene_total >= 1.5 * our_total:
+                score -= W_DOMINATION_BONUS + (ene_total - 1.5 * our_total) * 1000.0
+        else:
+            # During foraging phase, temporary material advantage is weighted reasonably
+            if our_total >= 1.5 * ene_total:
+                score += 15000.0 + (our_total - 1.5 * ene_total) * 500.0
+            elif ene_total >= 1.5 * our_total:
+                score -= 15000.0 + (ene_total - 1.5 * our_total) * 500.0
 
         # 2. 25-Ply Lookahead Race Projection Bonus
         if human_groups:
@@ -449,9 +548,9 @@ class ApexAlphaBetaAgent:
             score += (proj_gain_us - proj_gain_ene) * W_PROJECTION
 
             if proj_us >= 1.5 * proj_ene:
-                score += 20000.0
+                score += 35000.0
             elif proj_ene >= 1.5 * proj_us:
-                score -= 20000.0
+                score -= 35000.0
 
         # 3. Human Feeding Potential Gradient
         if human_groups:
@@ -518,11 +617,15 @@ class ApexAlphaBetaAgent:
                     elif d_ene <= 3 and e_cnt >= my_cnt:
                         score -= 5000.0
 
-            if not human_groups and len(our_groups) > 1:
+            # Proactive regrouping & coalition formation
+            accessible_humans_cnt = sum(1 for hp, hc in human_groups if our_total >= hc)
+            if accessible_humans_cnt <= 2 and len(our_groups) > 1:
                 pair_distances = [chebyshev_dist(our_groups[i][0], our_groups[j][0])
                                   for i in range(len(our_groups))
                                   for j in range(i + 1, len(our_groups))]
-                score -= (sum(pair_distances) / len(pair_distances)) * 50.0
+                avg_pair_d = sum(pair_distances) / len(pair_distances)
+                penalty_weight = 120.0 if accessible_humans_cnt == 0 else 60.0
+                score -= avg_pair_d * penalty_weight
 
         # 6. Endgame Pursuit & Anti-Stalemate Pressure
         min_human_d = min((chebyshev_dist(g_pos, h_pos) for g_pos, _ in our_groups for h_pos, _ in human_groups), default=99)

@@ -296,14 +296,21 @@ class BoardState:
                     # Probabilistic battle between monsters (neither has 1.5x advantage)
                     p = combat_win_probability(e1, e2)
                     if deterministic:
-                        # Risk-averse Minimax: attacking without 1.5x advantage carries fatal wipeout risk.
-                        # In minimax evaluation, we treat non-1.5x offensive gambles as unfavorable,
-                        # assuming the defender holds the cell with surviving units.
-                        exp_enemy = max(1, round((1.0 - p) * e2))
-                        if is_vampire:
-                            new_state.set_cell(dst, 0, 0, exp_enemy)
+                        # True Expected-Value resolution for Minimax lookahead:
+                        # If P >= 0.5, attacker has advantage and wins in expectation with P * E1 survivors.
+                        # If P < 0.5, defender holds the cell with (1 - P) * E2 survivors.
+                        if p >= 0.5:
+                            exp_att = max(1, round(p * e1))
+                            if is_vampire:
+                                new_state.set_cell(dst, 0, exp_att, 0)
+                            else:
+                                new_state.set_cell(dst, 0, 0, exp_att)
                         else:
-                            new_state.set_cell(dst, 0, exp_enemy, 0)
+                            exp_def = max(1, round((1.0 - p) * e2))
+                            if is_vampire:
+                                new_state.set_cell(dst, 0, 0, exp_def)
+                            else:
+                                new_state.set_cell(dst, 0, exp_def, 0)
                     else:
                         win = (random.random() < p)
                         if win:
