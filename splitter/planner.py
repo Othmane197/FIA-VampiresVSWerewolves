@@ -52,6 +52,8 @@ class PlanConfig:
                                    # even when not behind (0 = only gambles when behind, the flagship)
     gamble_p: float = 0.3          # gamble goals from these odds (lower for a desperate opponent)
     threat_p: float = 0.3          # an enemy within 2 that strikes with these odds is a threat (flee)
+    keep_away_p: float = 0.0       # > 0 and no humans left: never step next to an enemy that beats
+                                   # the group with these odds (it would strike first); 0 = off
 
 
 @dataclass
@@ -161,16 +163,20 @@ def detachment_safe(src: Pos, k: int, target: Pos, h: int, enemies: Dict[Pos, in
 
 def safe_step(state: State, side: int, src: Pos, count: int, goal: Pos, forbidden: Set[Pos],
               enemies: Dict[Pos, int], danger_weight: float, intend_battle: bool = False,
-              loss_cache: Optional[dict] = None, strike_p: float = 0.45) -> Optional[Pos]:
+              loss_cache: Optional[dict] = None, strike_p: float = 0.45,
+              keep_away_p: float = 0.0) -> Optional[Pos]:
     """
     Best neighbour of src to walk `count` creatures towards `goal`:
       * never a cell in `forbidden` (rule 5: cells that are sources this turn);
       * never into humans / enemies we cannot beat for sure, except the goal itself when
         `intend_battle` (a gamble);
       * free conversions / sure kills on the way are welcome;
+      * keep_away_p > 0 and no humans left: never next to an enemy that beats the group with
+        these odds (it would strike first), except onto the goal itself; None = the group stays;
       * score = distance to goal + danger_weight * (expected loss from an enemy attack) / count.
     """
     humans = state.humans
+    keep_away = keep_away_p > 0.0 and not humans
     best, best_key = None, None
     for n in state.nbrs[src]:
         if n in forbidden:
@@ -192,6 +198,9 @@ def safe_step(state: State, side: int, src: Pos, count: int, goal: Pos, forbidde
                 continue
         if state.groups[side].get(n, 0) + arrive > MAX_CELL:
             continue
+        if keep_away and n != goal and _first_strike_risk(n, arrive + state.groups[side].get(n, 0),
+                                                          enemies, keep_away_p):
+            continue
         if e:
             danger = 0.0
         elif loss_cache is not None:
@@ -206,6 +215,14 @@ def safe_step(state: State, side: int, src: Pos, count: int, goal: Pos, forbidde
         if best_key is None or key < best_key:
             best, best_key = n, key
     return best
+
+
+def _first_strike_risk(cell: Pos, count: int, enemies: Dict[Pos, int], p_min: float) -> bool:
+    """Would an enemy next to `cell` beat `count` creatures standing there with odds >= p_min?"""
+    for ep, e in enemies.items():
+        if cheb(ep, cell) == 1 and win_probability(e, count, False) >= p_min:
+            return True
+    return False
 
 
 def border_distance(state: State, p: Pos) -> int:
@@ -345,7 +362,8 @@ class _Builder:
                     dst = self.step_cache[key] = safe_step(
                         self.state, self.side, src, count, goal.target, sources, self.enemies,
                         self.cfg.danger_weight, intend_battle=goal.kind == "gamble",
-                        loss_cache=self.loss_cache, strike_p=self.cfg.danger_strike_p)
+                        loss_cache=self.loss_cache, strike_p=self.cfg.danger_strike_p,
+                        keep_away_p=self.cfg.keep_away_p)
             if dst is None:
                 continue
             moves[(src, dst)] = moves.get((src, dst), 0) + count
@@ -684,8 +702,13 @@ def _race_goals(state: State, pos: Pos, cnt: int, mine: Dict[Pos, int],
 
 
 def _race_step(state: State, side: int, src: Pos, cnt: int, goal: Pos, forbidden: Set[Pos],
-               enemies: Dict[Pos, int]) -> Optional[Pos]:
-    """One step towards goal: least danger from sure-killers, then closest; never into a fight we cannot win for sure."""
+               enemies: Dict[Pos, int], safe: bool = False) -> Optional[Pos]:
+    """
+    One step towards goal: least danger from sure-killers, then closest; never into a fight we
+    cannot win for sure. safe=True: enemies at least as big (they strike first at >= 50%) count as
+    danger too (race_root_safe option).
+    """
+    threshold = 1.0 if safe else 1.5
     best, best_key = None, None
     for n in state.nbrs[src]:
         if n in forbidden:
@@ -701,7 +724,7 @@ def _race_step(state: State, side: int, src: Pos, cnt: int, goal: Pos, forbidden
         danger = 0
         if n != goal:
             for tp, te in enemies.items():
-                if te >= 1.5 * cnt and cheb(n, tp) <= 1:
+                if te >= threshold * cnt and cheb(n, tp) <= 1:
                     danger += te
         key = (danger, cheb(n, goal), abs(n[0] - goal[0]) + abs(n[1] - goal[1]))
         if best_key is None or key < best_key:
@@ -709,11 +732,14 @@ def _race_step(state: State, side: int, src: Pos, cnt: int, goal: Pos, forbidden
     return best
 
 
-def race_rollout_plan(state: State, side: int, rng, eps: float = 0.15, strike_p: float = 0.0) -> Tuple[Move, ...]:
+def race_rollout_plan(state: State, side: int, rng, eps: float = 0.15, strike_p: float = 0.0,
+                      keep_away_p: float = 0.0) -> Tuple[Move, ...]:
     """
     Splitter-R rollout policy (RaceMCTS's, on our rules): every group takes its best goal, its
     second with probability eps; with strike_p > 0 a group adjacent to an enemy it beats with
-    at least that probability strikes first (the tactic RaceMCTS wins games with).
+    at least that probability strikes first (the tactic RaceMCTS wins games with). With
+    keep_away_p > 0 and no humans left, cells next to an enemy that beats the group with these
+    odds count as dangerous, like cells next to a sure killer (see safe_step).
     """
     # Same moves as _race_goals + _race_step (checked on 1,896 positions), 33% faster: only the
     # best two goals are kept (ties: first listed wins, like the stable sort), distances inlined,
@@ -723,6 +749,7 @@ def race_rollout_plan(state: State, side: int, rng, eps: float = 0.15, strike_p:
         return ()
     enemies = state.groups[1 - side]
     humans = state.humans
+    keep_away = keep_away_p > 0.0 and not humans
     moves: Dict[Tuple[Pos, Pos], int] = {}
     for pos, cnt in sorted(mine.items(), key=lambda g: -g[1]):
         px, py = pos
@@ -741,13 +768,15 @@ def race_rollout_plan(state: State, side: int, rng, eps: float = 0.15, strike_p:
             for hp, h in humans.items():
                 if cnt >= h:
                     _offer(top, h / (max(abs(hp[0] - px), abs(hp[1] - py)) + 0.5), hp)
-            killers = []
+            killers, strikers = [], []
             for ep, e in enemies.items():
                 d = max(abs(ep[0] - px), abs(ep[1] - py))
                 if cnt >= 1.5 * e:
                     _offer(top, 1.2 * e / (d + 0.5), ep)
                 if e >= 1.5 * cnt:
                     killers.append((ep, e, d))
+                elif keep_away and win_probability(e, cnt, False) >= keep_away_p:
+                    strikers.append((ep, e, d))
             fpos, fd, fcnt = None, 0, 0
             for p, c in mine.items():
                 if p != pos:
@@ -765,7 +794,7 @@ def race_rollout_plan(state: State, side: int, rng, eps: float = 0.15, strike_p:
                         else (state.cols // 2, state.rows // 2))
             elif top[3] is not None and rng.random() < eps:
                 goal = top[3]
-            dst = _race_step_fast(state, pos, cnt, goal, mine, enemies, killers)
+            dst = _race_step_fast(state, pos, cnt, goal, mine, enemies, killers + strikers if strikers else killers)
         if dst is not None:
             moves[(pos, dst)] = moves.get((pos, dst), 0) + cnt
     out = tuple((s[0], s[1], n, d[0], d[1]) for (s, d), n in moves.items()
@@ -808,11 +837,13 @@ def _race_step_fast(state: State, src: Pos, cnt: int, goal: Pos, mine: Dict[Pos,
     return best
 
 
-def race_plans(state: State, side: int, max_plans: int = 6) -> List[Plan]:
+def race_plans(state: State, side: int, max_plans: int = 6, safe: bool = False) -> List[Plan]:
     """
     Splitter-R root plans (RaceMCTS's plan families, on our rules): every group to its best goal,
     whole-group splits to two houses, regroup on the biggest, one group on its second goal.
     No safety checks on purpose: they are the aggressive options our search then judges.
+    safe=True (race_root_safe, when we are not behind): their steps also avoid enemies at least as
+    big as the moving group (which would strike first at >= 50%).
     """
     mine = state.groups[side]
     if not mine:
@@ -828,7 +859,7 @@ def race_plans(state: State, side: int, max_plans: int = 6) -> List[Plan]:
         for pos, cnt in groups:
             if pos in skip or pos not in choice:
                 continue
-            dst = _race_step(state, side, pos, cnt, choice[pos], forbidden, enemies)
+            dst = _race_step(state, side, pos, cnt, choice[pos], forbidden, enemies, safe)
             if dst is not None:
                 out.append((pos[0], pos[1], cnt, dst[0], dst[1]))
         return out
@@ -852,10 +883,10 @@ def race_plans(state: State, side: int, max_plans: int = 6) -> List[Plan]:
                         options.append(((ca + cb) / (cheb(pos, ha) + cheb(pos, hb) + 1.0), ha, ca, hb))
         options.sort(key=lambda o: -o[0])
         for _, ha, ca, hb in options[:2]:
-            dst_a = _race_step(state, side, pos, ca, ha, sources, enemies)
+            dst_a = _race_step(state, side, pos, ca, ha, sources, enemies, safe)
             if dst_a is None:
                 continue
-            dst_b = _race_step(state, side, pos, cnt - ca, hb, sources | {dst_a}, enemies)
+            dst_b = _race_step(state, side, pos, cnt - ca, hb, sources | {dst_a}, enemies, safe)
             if dst_b is None:
                 continue
             rest = [m for m in turn(default, {pos}, sources) if (m[3], m[4]) not in (pos, dst_a, dst_b)]

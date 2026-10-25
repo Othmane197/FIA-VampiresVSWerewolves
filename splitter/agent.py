@@ -56,6 +56,7 @@ class SplitterAgent:
                  reserve_radius: int = 6, max_ply: int = 200, game_seconds: Optional[float] = 300.0,
                  rollout_policy: str = "quick", rollout_strike: float = 0.0, rollout_depth_contact: int = 0,
                  leaf_mix: float = 1.0, race_root: bool = False, desperate_p: float = 0.0,
+                 keep_away: bool = False, race_root_safe: bool = False,
                  seed: Optional[int] = None, verbose: bool = False, **extra):
         """Build the plan config (variants via keyword arguments), the evaluation and the MCTS engine."""
         self.name = name
@@ -77,7 +78,9 @@ class SplitterAgent:
                 raise TypeError(f"unknown Splitter option {k!r}")
         self.ev = EvalParams(**ev)
         self.race_root = race_root             # RaceMCTS-style plans added at the root (the flagship)
+        self.race_root_safe = race_root_safe   # ... whose steps avoid enemies as big as the group, when not behind
         self.desperate_p = desperate_p         # > 0: a losing opponent is expected to strike from these odds
+        self.keep_away = keep_away             # ... and then, with no humans left, we never step into its reach
         self.mcts = MCTS(self.cfg, c=c, rollout_depth=rollout_depth, prior_bias=prior_bias,
                          widen_k=widen_k, rng=random.Random(seed), ev=self.ev,
                          rollout_policy=rollout_policy, rollout_strike=rollout_strike,
@@ -91,6 +94,8 @@ class SplitterAgent:
         self.turns = 0
         self.first_call: Optional[float] = None
         self.intents = {}                      # {cell: goal} of the plan we played last turn
+        self._deciding = None                  # (state, side) while a decision is in progress
+        self._top_plan = None                  # the planner's top plan for that decision
 
     # ------------------------------------------------------------------ interfaces
     def compute_moves(self, game_state) -> List[Move]:
@@ -123,6 +128,21 @@ class SplitterAgent:
         self.turns += 1
         return self._safe_choose(state, side, state.ply if ply is None else ply, start)
 
+    def anytime_moves(self) -> Optional[List[Move]]:
+        """
+        main.py's watchdog, when the decision in progress is late: the search's best plan so far
+        (or the planner's top plan before the search starts), if it is legal; else None.
+        Called from another thread: it only reads references set by the deciding thread.
+        """
+        deciding = self._deciding
+        if deciding is None:
+            return None
+        state, side = deciding
+        plan = self.mcts.best_so_far or self._top_plan
+        if plan is None or not check_moves(state.rows, state.cols, state.groups[side], plan.moves)[0]:
+            return None
+        return [(int(a), int(b), int(c), int(d), int(e)) for a, b, c, d, e in plan.moves]
+
     # ------------------------------------------------------------------ core
     def _remaining_plies(self, ply: int, now: float) -> float:
         """Plies left, from the ply cap and from the game clock (whichever ends first)."""
@@ -140,6 +160,16 @@ class SplitterAgent:
         mine = state.groups[side]
         if not mine:
             return []
+        self.mcts.best_so_far = self._top_plan = None
+        self._deciding = (state, side)
+        try:
+            return self._decide(state, side, ply, start)
+        finally:
+            self._deciding = None
+
+    def _decide(self, state: State, side: int, ply: int, start: float) -> List[Move]:
+        """_safe_choose's body: search, then validate, then the fallbacks."""
+        mine = state.groups[side]
         moves = None
         try:
             moves = self._choose(state, side, ply, start)
@@ -172,16 +202,18 @@ class SplitterAgent:
             # strike costs it nothing, a won one can wipe out our lead): stay out of its reach
             opp_gamble_p = self.desperate_p
             cfg = replace(self.cfg, danger_strike_p=min(self.cfg.danger_strike_p, self.desperate_p),
-                          threat_p=min(self.cfg.threat_p, self.desperate_p))
+                          threat_p=min(self.cfg.threat_p, self.desperate_p),
+                          keep_away_p=self.desperate_p if self.keep_away else 0.0)
         # keep only intents of groups that still exist where we left them
         intents = {p: t for p, t in self.intents.items() if p in state.groups[side]}
         plans = generate_plans(state, side, cfg, behind=behind, intents=intents)
         if not plans:
             return []
+        self._top_plan = plans[0]
         if self.race_root:                     # aggressive whole-group options; the search judges them
             seen = {p.moves for p in plans}
             half = 0.5 * (max(p.prior for p in plans) or 1.0)
-            for p in race_plans(state, side):
+            for p in race_plans(state, side, safe=self.race_root_safe and not behind):
                 if p.moves not in seen:
                     p.prior = half
                     plans.append(p)

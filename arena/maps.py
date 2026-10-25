@@ -141,6 +141,17 @@ _SPECS = {
         ("fr_20x32", 207, 20, 32, 14, 14, 1, 6, 16, None),
         ("fr_12x12", 208, 12, 12, 11, 6, 2, 7, 10, 5),
     ],
+    # FRESH2 family (campaign 4): the validation of campaign 4 only (chapter 17)
+    "fresh2": [
+        ("f2_10x16", 301, 10, 16, 10, 7, 1, 5, None, None),
+        ("f2_13x19v", 302, 13, 19, 12, 12, 1, 4, None, None),
+        ("f2_12x20p", 303, 12, 20, 10, 3, 2, 6, 20, None),
+        ("f2_9x15c", 304, 9, 15, 10, 5, 1, 6, 8, 4),
+        ("f2_14x26", 305, 14, 26, 12, 9, 1, 7, 12, None),
+        ("f2_12x18s", 306, 12, 18, 10, 3, 4, 9, None, None),
+        ("f2_17x29", 307, 17, 29, 14, 13, 1, 6, 15, None),
+        ("f2_11x13", 308, 11, 13, 11, 6, 2, 7, 9, 5),
+    ],
 }
 
 _cache: Dict[str, List[Tuple[str, State]]] = {}
@@ -148,7 +159,8 @@ _cache: Dict[str, List[Tuple[str, State]]] = {}
 
 def build_suite(name: str = "all", max_ply: int = 200) -> List[Tuple[str, State]]:
     """name: 'all' (the 14 tuning maps), 'given', a family name ('holdout' = validation only,
-    'fresh' = campaign 3's final check only), or a comma-separated list of map names/families."""
+    'fresh' = campaign 3's final check only, 'fresh2' = campaign 4's validation only), or a
+    comma-separated list of map names/families."""
     key = f"{name}:{max_ply}"
     if key in _cache:
         return _cache[key]
@@ -160,7 +172,8 @@ def build_suite(name: str = "all", max_ply: int = 200) -> List[Tuple[str, State]
             every.append((nm, symmetric_map(seed, rows, cols, army, pairs, hmin, hmax, center, gap, max_ply)))
             families[fam].append(nm)
     if name == "all":                     # the TUNING maps: never the hold-out or fresh families
-        out = [m for m in every if m[0] not in families["holdout"] and m[0] not in families["fresh"]]
+        held = set(families["holdout"]) | set(families["fresh"]) | set(families["fresh2"])
+        out = [m for m in every if m[0] not in held]
     else:
         wanted = []
         for part in name.split(","):

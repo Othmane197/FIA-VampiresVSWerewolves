@@ -95,6 +95,14 @@ Off by default (the backup uses none); the flagship turns on the eight marked be
 | `threat_p` | 0.3 | `PlanConfig` | An enemy within 2 cells that strikes with these odds is a threat to flee from | — |
 | `eval_opp_strike_p` | 0.3 | `EvalParams` | Exposure: the opponent strikes us from these odds | — |
 
+**Campaign 4 candidates** (chapter 17, off by default, under test):
+
+| Parameter | Default | Where | Meaning |
+|---|---|---|---|
+| `keep_away` | False | agent | With `desperate_p`: once no humans are left, our groups never step next to an enemy that beats them with `desperate_p` odds (sets `PlanConfig.keep_away_p` and our side of the race rollouts) |
+| `keep_away_p` | 0.0 | `PlanConfig` | The odds `safe_step` uses for that (0 = off) |
+| `race_root_safe` | False | agent | When not behind, the race root plans' steps also avoid cells next to enemies at least as big as the moving group |
+
 ## 10.5 Removed parameters (measured, then deleted from the code)
 
 | Parameter | What it did | Result |

@@ -51,9 +51,10 @@ def fallback_moves(state: GameState):
 class Watchdog:
     """
     Runs agent.compute_moves in a worker thread and waits at most `limit` seconds: a late answer
-    would make the server skip our turn (and can desynchronise the protocol), so after `limit`
-    the caller sends fallback_moves instead. While a late worker is still running, the agent is
-    not called again (its state is not thread-safe): the fallback is used until it finishes.
+    would make the server skip our turn (and can desynchronise the protocol). After `limit`, this
+    turn's search is asked for its best plan so far (agent.anytime_moves, already legality-checked);
+    without one, the caller sends fallback_moves. While a late worker is still running, the agent
+    is not called again (its state is not thread-safe): the fallback is used until it finishes.
     """
 
     def __init__(self, limit: float):
@@ -79,6 +80,11 @@ class Watchdog:
         self.worker.join(max(0.05, self.limit - (time.time() - start)))
         if self.worker.is_alive():
             self.late += 1
+            anytime = getattr(agent, "anytime_moves", None)
+            moves = anytime() if anytime is not None else None
+            if moves:
+                print(f"[Watchdog] agent still thinking after {self.limit:.2f}s -> its best plan so far")
+                return moves
             print(f"[Watchdog] agent still thinking after {self.limit:.2f}s -> fallback move")
             return None
         if "error" in box:

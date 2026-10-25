@@ -148,7 +148,7 @@ earlier in this iteration. `State.apply` then raised, the whole search for that 
 the safety net played the plain fallback move.
 
 **How often:** this happened on **4.1% of v5's turns.** The fix checks the plan at expansion, as
-the descent step already did ([`MCTS._iterate`](../../splitter/mcts.py#L157)).
+the descent step already did ([`MCTS._iterate`](../../splitter/mcts.py#L161)).
 
 **Effect** (paired, 504 games):
 - **+2.2 points** against the panel;

@@ -47,7 +47,7 @@ candidate of chapter 13.1).
 
 | Option | Implementation | Measured |
 |---|---|---|
-| `plan_cache=1` | **Transposition cache** inside one search: `generate_plans` results keyed by (position, side, behind) and `evaluate` results keyed by (position, side to move, plies left) ([`MCTS._plans`](../../splitter/mcts.py#L81), `MCTS._evaluate`) | Positions repeat a lot when there are few groups: 93% of plan generations on thetrap and 62% on prize_11x17 were repeats, 0% on vil_13x21. In real games: 124–207 cache hits per decision at 0.25 s |
+| `plan_cache=1` | **Transposition cache** inside one search: `generate_plans` results keyed by (position, side, behind) and `evaluate` results keyed by (position, side to move, plies left) ([`MCTS._plans`](../../splitter/mcts.py#L82), `MCTS._evaluate`) | Positions repeat a lot when there are few groups: 93% of plan generations on thetrap and 62% on prize_11x17 were repeats, 0% on vil_13x21. In real games: 124–207 cache hits per decision at 0.25 s |
 
 The profile of a 1.5 s decision (vil_13x21, 8 groups) shows where the time goes: plan generation
 50%, rollouts 22%, evaluation 14%, legality checks 14%.

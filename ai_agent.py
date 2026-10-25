@@ -27,6 +27,8 @@ class AIAgent:
     Environment knobs (optional): SPLITTER_TIME (seconds per move, default 1.5),
     SPLITTER_MODEL=backup (play the backup model, the campaign-2 flagship, instead of the
     flagship, splitter.agent.MODELS),
+    SPLITTER_OPTIONS="key=value,..." (testing only: extra options on top of the model, e.g. a
+    candidate under real conditions; ignored, with a warning, if they do not build an engine),
     SPLITTER_VERBOSE=1 (print the search statistics every turn).
     """
 
@@ -36,12 +38,19 @@ class AIAgent:
         self.starter = StarterAgent(name)
         if time_limit is None:
             time_limit = float(os.environ.get("SPLITTER_TIME", "1.5"))
+        self.engine = None
         try:
             from splitter.agent import MODELS, SplitterAgent
             model = os.environ.get("SPLITTER_MODEL", "flagship")
             options = {**MODELS.get(model, MODELS["flagship"]), **kwargs}
-            self.engine = SplitterAgent(name=name, time_limit=time_limit,
-                                        verbose=os.environ.get("SPLITTER_VERBOSE") == "1", **options)
+            extra = _parse_options(os.environ.get("SPLITTER_OPTIONS", ""))
+            verbose = os.environ.get("SPLITTER_VERBOSE") == "1"
+            for opts in ([{**options, **extra}, options] if extra else [options]):
+                try:
+                    self.engine = SplitterAgent(name=name, time_limit=time_limit, verbose=verbose, **opts)
+                    break
+                except TypeError as e:               # a bad SPLITTER_OPTIONS never costs the engine
+                    print(f"[AIAgent] SPLITTER_OPTIONS ignored ({e})")
         except Exception as e:                       # e.g. a file missing on the CTI machine
             print(f"[AIAgent] Splitter unavailable ({e!r}), using the starter strategy")
             self.engine = None
@@ -61,6 +70,36 @@ class AIAgent:
             except Exception as e:
                 print(f"[AIAgent] Splitter error {e!r}, using the starter strategy this turn")
         return self.starter.compute_moves(state)
+
+    def anytime_moves(self) -> Optional[List[Tuple[int, int, int, int, int]]]:
+        """For main.py's watchdog when compute_moves is late: the search's best plan so far, or None."""
+        try:
+            return self.engine.anytime_moves() if self.engine is not None else None
+        except Exception:                       # never let the late answer cost the turn
+            return None
+
+
+def _parse_options(text: str) -> dict:
+    """'a=1,b=0.5,c=true' -> {'a': 1, 'b': 0.5, 'c': True}; malformed entries are skipped."""
+    out = {}
+    for item in text.split(","):
+        key, sep, value = item.partition("=")
+        key, value = key.strip(), value.strip()
+        if not sep or not key:
+            continue
+        low = value.lower()
+        if low in ("true", "false"):
+            out[key] = low == "true"
+            continue
+        for cast in (int, float):
+            try:
+                out[key] = cast(value)
+                break
+            except ValueError:
+                pass
+        else:
+            out[key] = value
+    return out
 
 
 class StarterAgent:

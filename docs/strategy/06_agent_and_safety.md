@@ -9,9 +9,9 @@ each guarantee a legal answer in time.
 | Function | Role |
 |---|---|
 | [`parse_args`](../../main.py#L11) | Server ip and port are the **last two arguments** (the PDF's launch convention), plus optional `--name` and `--delay` |
-| [`main`](../../main.py#L89) | Protocol loop: sends NME; builds the board from SET, HUM, HME and MAP; answers every UPD with a MOV; resets the agent on END; exits on BYE |
+| [`main`](../../main.py#L95) | Protocol loop: sends NME; builds the board from SET, HUM, HME and MAP; answers every UPD with a MOV; resets the agent on END; exits on BYE |
 | [`fallback_moves`](../../main.py#L39) | One legal move (the biggest group to a free neighbour), used if the agent crashes, returns nothing or is too slow. **An empty MOV is never sent** |
-| [`Watchdog`](../../main.py#L51) | Runs `compute_moves` in a worker thread and waits at most `SPLITTER_WATCHDOG` (1.8 s) after the UPD; if the agent is late, the fallback move is sent instead. While a late worker is still running, the agent is not called again (its state is not thread-safe) |
+| [`Watchdog`](../../main.py#L51) | Runs `compute_moves` in a worker thread and waits at most `SPLITTER_WATCHDOG` (1.8 s) after the UPD. If this turn's search is late, it sends **the search's best plan so far** (`agent.anytime_moves()`: the most visited root plan, refreshed every 32 iterations, or the planner's top plan before the search starts; legality-checked), and only without one the fallback move (campaign 4). While a late worker is still running, the agent is not called again (its state is not thread-safe): the next turn uses the fallback move |
 
 **Changes to the starter version:**
 - the default `--delay` is now 0 (0.5 s used a quarter of the time budget);
@@ -26,9 +26,11 @@ The binary protocol itself is the starter's [network.py](../../network.py) and
 - **[`AIAgent`](../../ai_agent.py#L22)** is what `main.py` instantiates.
   - It builds a [`SplitterAgent`](../../splitter/agent.py#L49) with `SPLITTER_TIME` seconds per move (default 1.5).
   - **`SPLITTER_MODEL`** chooses the model: `flagship` (default) or `backup` (6.5).
+  - `SPLITTER_OPTIONS="key=value,..."` (testing only) adds options to the model, to play a candidate under real conditions (`tools/teammate_matches.py --options`). A malformed entry is skipped; an unknown option is reported and the model is built without the extra options, so a bad value never costs the engine.
   - `SPLITTER_VERBOSE=1` prints the search statistics.
+  - [`AIAgent.anytime_moves`](../../ai_agent.py#L74) gives the watchdog the engine's best plan so far.
   - If the `splitter` package cannot even be imported (for example a missing file on the CTI machine), it falls back to the starter strategy.
-- **[`AIAgent.compute_moves`](../../ai_agent.py#L54)** calls the Splitter and falls back to [`StarterAgent`](../../ai_agent.py#L66), the original starter-kit logic, on any error.
+- **[`AIAgent.compute_moves`](../../ai_agent.py#L63)** calls the Splitter and falls back to [`StarterAgent`](../../ai_agent.py#L105), the original starter-kit logic, on any error.
 
 ## 6.3 [splitter/agent.py](../../splitter/agent.py): `SplitterAgent`
 
@@ -36,27 +38,27 @@ The binary protocol itself is the starter's [network.py](../../network.py) and
 
 | Method | Used by |
 |---|---|
-| [`compute_moves(game_state)`](../../splitter/agent.py#L96) | `main.py` / `AIAgent`, Dana's self-play |
-| [`compute_moves_board(board, species)`](../../splitter/agent.py#L111) | Othmane's and Ronita's arenas |
-| [`choose(state, side, ply)`](../../splitter/agent.py#L118) | Our arena (fast path, true ply known) |
+| [`compute_moves(game_state)`](../../splitter/agent.py#L101) | `main.py` / `AIAgent`, Dana's self-play |
+| [`compute_moves_board(board, species)`](../../splitter/agent.py#L116) | Othmane's and Ronita's arenas |
+| [`choose(state, side, ply)`](../../splitter/agent.py#L123) | Our arena (fast path, true ply known) |
 
-**The decision: [`_choose`](../../splitter/agent.py#L164).**
+**The decision: [`_choose`](../../splitter/agent.py#L194).**
 
-1. **Plies left** = [`_remaining_plies`](../../splitter/agent.py#L127).
+1. **Plies left** = [`_remaining_plies`](../../splitter/agent.py#L147).
    - The server never tells us the ply, so `compute_moves` estimates it as 2 × our turn counter.
    - After 10 plies it also projects the plies left from the game clock (`game_seconds` = 300, i.e. 5 minutes), because the clock can end the game before the 200-ply cap when both bots use most of their 2 s. (In the arena the clock rarely bound, chapter 14.3, stage E.)
 2. **Behind?** We are behind if `evaluate(...)` < 0.35, or if in the last 20 plies our material is below theirs ([`material_balance`](../../splitter/evaluate.py#L220)). Only then are gamble plans generated (`gamble="adaptive"`).
-3. **Root plans** = [`generate_plans`](../../splitter/planner.py#L363) with **last turn's intents.** Only intents of groups still standing where we left them are kept (commitment, chapter 03).
+3. **Root plans** = [`generate_plans`](../../splitter/planner.py#L381) with **last turn's intents.** Only intents of groups still standing where we left them are kept (commitment, chapter 03).
 4. **Search.**
    - `search="greedy"`, or only one plan: play the top plan.
    - Otherwise [`MCTS.search`](../../splitter/mcts.py#L116) with the **remaining budget**: `time_limit` − time already used − 20 ms.
 5. **Remember intents.** The chosen plan's intents are stored for next turn.
 
-**The safety net: [`_safe_choose`](../../splitter/agent.py#L137).**
+**The safety net: [`_safe_choose`](../../splitter/agent.py#L157).**
 
 1. Run `_choose` inside try/except.
 2. Validate the result with [`check_moves`](../../splitter/rules.py#L91), the server's cheating rules plus bounds and the 255 cap.
-3. If invalid or empty: [`fallback_plan`](../../splitter/planner.py#L600), then [`_emergency_move`](../../splitter/agent.py#L214).
+3. If invalid or empty: [`fallback_plan`](../../splitter/planner.py#L618), then [`_emergency_move`](../../splitter/agent.py#L246).
 4. Convert every value to a plain `int` 5-tuple, ready for `struct.pack`.
 5. The reason for any rejection is kept in `last_error` (the tests assert it stays `None`).
 

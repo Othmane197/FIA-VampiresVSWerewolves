@@ -178,6 +178,45 @@ class TestSafety(unittest.TestCase):
         self.assertEqual(dog.decide(slow, None, time.time()), [(0, 0, 1, 1, 1)])
         self.assertEqual(dog.late, 1)
 
+    def test_splitter_options_never_cost_the_engine(self):
+        # SPLITTER_OPTIONS (testing a candidate under real conditions) adds options to the model;
+        # a bad value is ignored with a warning: the tournament bot never falls back to the starter
+        from ai_agent import AIAgent
+        old = os.environ.get("SPLITTER_OPTIONS")
+        try:
+            os.environ["SPLITTER_OPTIONS"] = "keep_away=true,strike_p=0.6"
+            engine = AIAgent("x", time_limit=0.05).engine
+            assert engine is not None
+            self.assertEqual((engine.keep_away, engine.desperate_p), (True, 0.1))
+            os.environ["SPLITTER_OPTIONS"] = "not_an_option=1,broken"
+            engine = AIAgent("x", time_limit=0.05).engine
+            assert engine is not None
+            self.assertEqual((engine.keep_away, engine.mcts.rollout_policy), (False, "race"))
+        finally:
+            if old is None:
+                os.environ.pop("SPLITTER_OPTIONS", None)
+            else:
+                os.environ["SPLITTER_OPTIONS"] = old
+
+    def test_watchdog_sends_the_best_plan_so_far_when_late(self):
+        # a search that would take 1.0 s behind a 0.3 s watchdog: the late answer is the search's
+        # current best plan (legal), not the naive fallback step; nothing is offered afterwards
+        import main
+        from ai_agent import AIAgent
+        s = load_xml("testmap.xml")
+        gs = s.to_game_state(W, home=(0, 0))
+        ai = AIAgent("T", time_limit=1.0)
+        dog = main.Watchdog(0.3)
+        moves = dog.decide(ai, gs, time.time())
+        self.assertEqual(dog.late, 1)
+        assert moves, moves
+        self.assertTrue(check_moves(s.rows, s.cols, s.groups[W], moves)[0], moves)
+        worker = dog.worker
+        assert worker is not None
+        worker.join(3.0)
+        self.assertFalse(worker.is_alive())
+        self.assertIsNone(ai.anytime_moves())          # no decision in progress any more
+
     def test_gamestate_interface(self):
         from ai_agent import AIAgent
         s = load_xml("testmap.xml")

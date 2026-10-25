@@ -4,6 +4,7 @@ Vampires, 2 as Werewolves), recorded.
 
     python tools/teammate_matches.py                       # the flagship vs the teammates' LIVE bots
     python tools/teammate_matches.py --model backup        # the backup model instead
+    python tools/teammate_matches.py --options keep_away=true   # a candidate: the flagship + options
     python tools/teammate_matches.py --opp Apex RaceMCTS   # only some opponents
     python tools/teammate_matches.py --all                 # every bot on the teammates' branches
     python tools/teammate_matches.py --no-update           # replay the versions already downloaded
@@ -158,7 +159,8 @@ def play_game(opponent: str, map_name: str, we_first: bool, a, log_prefix: str, 
     py = sys.executable
     ours = [py, "main.py", "--name", "Splitter", host, port]
     theirs = [py, os.path.join("tools", "play_bot.py"), opponent, host, port, "--time", str(a.opp_time)]
-    env = dict(os.environ, SPLITTER_MODEL=a.model, SPLITTER_TIME=str(a.time), PYTHONUNBUFFERED="1")
+    env = dict(os.environ, SPLITTER_MODEL=a.model, SPLITTER_OPTIONS=a.options, SPLITTER_TIME=str(a.time),
+               PYTHONUNBUFFERED="1")
     order = [("us", ours), ("them", theirs)] if we_first else [("them", theirs), ("us", ours)]
     t0 = time.time()
     with ExitStack() as files:
@@ -254,7 +256,7 @@ def store_history(rows, a, run_id: str):
             rs = [r for r in rows if r["opponent"] == opp]
             p = sum(r["score"] for r in rs) / len(rs)
             se = math.sqrt(max(p * (1 - p), 1e-9) / len(rs))
-            w.writerow({"run": run_id, "bot": f"Splitter-{a.model} (real conditions)",
+            w.writerow({"run": run_id, "bot": f"Splitter-{model_label(a)} (real conditions)",
                         "opponents": f"{opp} {rs[0]['opponent_version']}",
                         "maps": a.maps, "games": a.games, "time": a.time, "seed": a.seed,
                         "games_played": len(rs), "score": round(100 * p, 1), "se": round(100 * se, 1),
@@ -262,10 +264,21 @@ def store_history(rows, a, run_id: str):
 
 
 # ---------------------------------------------------------------------------- main
+def model_label(a) -> str:
+    """'flagship', or 'flagship+keep_away=true' when --options are given."""
+    return a.model + (f"+{a.options}" if a.options else "")
+
+
+def _file_safe(text: str) -> str:
+    return "".join(c if c.isalnum() or c in "-_.+" else "_" for c in text)[:80]
+
+
 def main():
     """Command line: update the teammates' bots, play every (opponent, game), record, summarize."""
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--model", choices=("flagship", "backup"), default="flagship", help="which of our two models plays")
+    ap.add_argument("--options", default="",
+                    help='extra options on top of the model, to test a candidate: "keep_away=true,strike_p=0.6"')
     ap.add_argument("--opp", nargs="+", default=None, help=f"opponents (default: {' '.join(MAIN_BOTS)})")
     ap.add_argument("--all", action="store_true", help="every teammate bot: " + " ".join(TEAMMATE_BOTS))
     ap.add_argument("--games", type=int, default=4,
@@ -299,11 +312,11 @@ def main():
 
     # 2. the games
     maps = [m.strip() for m in a.maps.split(",") if m.strip()]
-    run_id = time.strftime("%Y%m%d-%H%M%S") + f"_{a.model}"
+    run_id = time.strftime("%Y%m%d-%H%M%S") + "_" + _file_safe(model_label(a))
     out = a.out or os.path.join(ROOT, "arena", "results", "teammates", run_id)
     os.makedirs(os.path.join(out, "logs"), exist_ok=True)
     total = len(playing) * a.games
-    print(f"\nSplitter ({a.model}) vs {', '.join(playing) or 'nobody'}: {a.games} games each = {total} games, "
+    print(f"\nSplitter ({model_label(a)}) vs {', '.join(playing) or 'nobody'}: {a.games} games each = {total} games, "
           f"one at a time, real server conditions. Results: {out}\n")
     rows = []
     with open(os.path.join(out, "games.csv"), "w", newline="") as f:
@@ -329,7 +342,7 @@ def main():
                       f"{row['plies']} plies, {row['minutes']} min{extra})", flush=True)
 
     # 3. the results
-    summary = summarize(rows, a.model, versions, unavailable)
+    summary = summarize(rows, model_label(a), versions, unavailable)
     with open(os.path.join(out, "summary.md"), "w", encoding="utf-8") as f:
         f.write(summary + "\n")
     if rows and not a.no_history:

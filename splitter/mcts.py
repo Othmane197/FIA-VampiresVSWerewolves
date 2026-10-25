@@ -76,6 +76,7 @@ class MCTS:
         self._deadline = 0.0
         self.iterations = 0
         self.root: Optional[Node] = None
+        self.best_so_far: Optional[Plan] = None     # the current search's most visited root plan
 
     # ------------------------------------------------------------------ helpers
     def _plans(self, state: State, side: int, root_side: int, behind: bool) -> List[Plan]:
@@ -140,6 +141,7 @@ class MCTS:
         self.iterations = 0
         if not plans:
             return None
+        self.best_so_far = plans[0]            # anytime answer for a late watchdog (main.py)
         if len(plans) == 1:
             return plans[0]
         rng = self.rng
@@ -149,6 +151,8 @@ class MCTS:
         while time.perf_counter() < deadline:
             self._iterate(root, state, side, remaining_plies, behind, rng, root_limit)
             self.iterations += 1
+            if self.iterations % 32 == 0 and root.children:
+                self.best_so_far = max(root.children, key=lambda ch: ch.visits).plan
         if not root.children:                  # budget gone before the first iteration finished
             return first
         best = max(root.children, key=lambda ch: (ch.visits, ch.value / max(ch.visits, 1)))
@@ -205,8 +209,10 @@ class MCTS:
             if state.is_terminal() or (race and time.perf_counter() > self._deadline):
                 break
             if race:
-                strike = self.rollout_strike if to_move == root_side else self._opp_strike
-                moves = race_rollout_plan(state, to_move, rng, 0.15, strike)
+                if to_move == root_side:
+                    moves = race_rollout_plan(state, to_move, rng, 0.15, self.rollout_strike, self._cfg_us.keep_away_p)
+                else:
+                    moves = race_rollout_plan(state, to_move, rng, 0.15, self._opp_strike)
             else:
                 moves = quick_plan(state, to_move)
             if not moves:
