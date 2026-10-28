@@ -1,18 +1,9 @@
 """
-Parallel MCTS AI Agent — Vampires VS Werewolves
-FIA - CentraleSupélec / Centrale Casablanca
-
-Algorithm: Root-Parallelized Monte Carlo Tree Search (MCTS)
-─────────────────────────────────────────────────────────────
-• Each CPU core runs an INDEPENDENT MCTS tree simultaneously.
-• All trees start from the same board state (root parallelization).
-• At time-up, results are aggregated by vote (summed visit counts).
-• Winner = move with the most visits across all cores.
-
-Why faster than regular MCTS?
-  1 core  x 1.75s = ~8,000  simulations
-  8 cores x 1.75s = ~64,000 simulations  (same clock time, 8x deeper)
-─────────────────────────────────────────────────────────────
+Harsha's AI Agent — rebuilt around the pattern that beat it in testing (Ronita's
+approach): generate a handful of *sensible whole-turn plans* (not random single-group
+steps), evaluate them with a house-race projection, and search with MCTS.
+Root-parallelized: each CPU core runs an independent tree from the same position,
+and the final move is chosen by summed visit count across all trees.
 """
 
 import os
@@ -21,425 +12,544 @@ import time
 import math
 import random
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from typing import List, Tuple, Optional, Dict
+from concurrent.futures.process import BrokenProcessPool
+from typing import Dict, List, Optional, Tuple
 
 from game_state import GameState, Species
-from game_engine import BoardState
+from game_engine import BoardState, chebyshev_dist
 
-# ═══════════════════════════════════════════════════════════════
-#  CONFIGURATION
-# ═══════════════════════════════════════════════════════════════
-NUM_CORES         = max(1, (os.cpu_count() or 2) - 1)  # leave 1 core for OS
-TIME_LIMIT        = 1.60   # seconds (0.25s safety buffer from 2.0s rule)
-UCT_C             = 1.414  # exploration constant sqrt(2)
-MAX_ROLLOUT_DEPTH = 20     # max playout steps per simulation
-MAX_CHILDREN      = 40     # max children expanded per node
+NUM_CORES     = max(1, (os.cpu_count() or 2) - 1)
+TIME_LIMIT    = 1.4     # seconds of search per turn (server allows 2.0)
+UCT_C         = 0.9     # UCB1 exploration constant; rewards are in [0, 1]
+ROLLOUT_PLIES = 8       # imaginary plies played out after a candidate plan
+MAX_PLANS     = 12      # candidate whole-turn plans considered per position
+DEBUG         = os.environ.get("HARSHA_DEBUG") == "1"
 
-DIRECTIONS = [(-1,-1), (-1,0), (-1,1),
-              ( 0,-1),          (0,1),
-              ( 1,-1),  (1,0), (1,1)]
+Pos  = Tuple[int, int]
+Move = Tuple[int, int, int, int, int]
+
+
+def _opp(species: Species) -> Species:
+    return Species.WEREWOLF if species == Species.VAMPIRE else Species.VAMPIRE
+
+
+def _move_key(moves: List[Move]) -> str:
+    return str(sorted(moves)) if moves else ""
 
 
 # ═══════════════════════════════════════════════════════════════
 #  STATE SNAPSHOT  — picklable for subprocess transfer
 # ═══════════════════════════════════════════════════════════════
 class StateSnapshot:
-    """
-    Lightweight, fully picklable game state snapshot.
-    multiprocessing uses pickle to send data to worker processes,
-    so the live GameState object must be converted to this first.
-    """
     __slots__ = ('rows', 'cols', 'grid', 'our_species', 'turn_count', 'max_turns')
 
     def __init__(self, rows, cols, grid, our_species, turn_count=0, max_turns=200):
-        self.rows        = rows
-        self.cols        = cols
-        self.grid        = grid         # {(x,y): (humans, vampires, werewolves)}
+        self.rows, self.cols = rows, cols
+        self.grid = grid                # {(x,y): (humans, vampires, werewolves)}
         self.our_species = our_species
-        self.turn_count  = turn_count
-        self.max_turns   = max_turns
+        self.turn_count = turn_count
+        self.max_turns = max_turns
 
-    def to_board_state(self):
-        bs            = BoardState(self.rows, self.cols, self.max_turns)
-        bs.grid       = dict(self.grid)
+    def to_board_state(self) -> BoardState:
+        bs = BoardState(self.rows, self.cols, self.max_turns)
+        bs.grid = dict(self.grid)
         bs.turn_count = self.turn_count
         return bs
 
 
-def game_state_to_snapshot(state):
-    grid = {pos: (cell.humans, cell.vampires, cell.werewolves)
-            for pos, cell in state.board.items()}
+def game_state_to_snapshot(state: GameState) -> StateSnapshot:
+    grid = {pos: (c.humans, c.vampires, c.werewolves) for pos, c in state.board.items()}
     return StateSnapshot(state.rows, state.cols, grid, state.our_species)
 
 
 # ═══════════════════════════════════════════════════════════════
-#  HELPERS
+#  BOARD SPLIT + HOUSE-RACE EVALUATION
 # ═══════════════════════════════════════════════════════════════
-def _opposite(s):
-    return Species.WEREWOLF if s == Species.VAMPIRE else Species.VAMPIRE
-
-
-def _get_groups(board, species):
-    is_vamp = (species == Species.VAMPIRE)
-    return [(pos, (v if is_vamp else w))
-            for pos, (h, v, w) in board.grid.items()
-            if (v if is_vamp else w) > 0]
-
-
-def _move_to_key(move):
-    if not move:
-        return ""
-    return str(sorted(move))
-
-
-# ═══════════════════════════════════════════════════════════════
-#  MOVE SAMPLER  — one combined move per call
-# ═══════════════════════════════════════════════════════════════
-def sample_combined_move(board, species, bias_smart=False):
-    """
-    Returns ONE combined move set: one (sx, sy, count, dx, dy) per group.
-
-    bias_smart=False  →  random neighbor   (variety for tree expansion)
-    bias_smart=True   →  utility-AI pick   (smart rollouts)
-    """
-    groups = _get_groups(board, species)
-    if not groups:
-        return None
-
-    is_vamp    = (species == Species.VAMPIRE)
-    sources    = {pos for pos, _ in groups}
-    chosen_dst = set()
-    moves      = []
-
-    if bias_smart:
-        humans  = [(pos, h) for pos, (h, v, w) in board.grid.items() if h > 0]
-        enemies = [(pos, (w if is_vamp else v))
-                   for pos, (h, v, w) in board.grid.items()
-                   if (w if is_vamp else v) > 0]
-        targets = humans or enemies
-
-    for (sx, sy), cnt in groups:
-        valid = []
-        for dx, dy in DIRECTIONS:
-            nx, ny = sx + dx, sy + dy
-            if 0 <= nx < board.cols and 0 <= ny < board.rows:
-                dst = (nx, ny)
-                # Rule 5: Destination cannot be a source cell in the same ply
-                if dst not in sources:
-                    valid.append(dst)
-
-        if not valid:
-            # Skip this group if it cannot move without violating Rule 5
-            continue
-
-        if bias_smart and targets:
-            def _score(n):
-                nh, nv, nw = board.grid.get(n, (0, 0, 0))
-                n_enemy = nw if is_vamp else nv
-                s = 0
-                if nh > 0:
-                    if cnt >= nh:
-                        s += 1000 + nh       # Guaranteed human conversion
-                    else:
-                        s -= 500             # Avoid disadvantageous human battle (P < 0.5)
-
-                if n_enemy > 0:
-                    if cnt >= 1.5 * n_enemy:
-                        s += 1200 + n_enemy  # Guaranteed wipeout of enemy
-                    elif n_enemy >= 1.5 * cnt:
-                        s -= 2000            # Suicidal: guaranteed loss
-                    else:
-                        p = cnt / (2.0 * n_enemy) if cnt < n_enemy else (cnt / float(n_enemy) - 0.5)
-                        s += int((p - 0.5) * 600)
-
-                s -= min(max(abs(n[0]-t[0][0]), abs(n[1]-t[0][1]))
-                         for t in targets) * 3
-                return s
-            best = max(valid, key=_score)
-        else:
-            best = random.choice(valid)
-
-        moves.append((sx, sy, cnt, best[0], best[1]))
-
-    return moves if moves else None
-
-
-# ═══════════════════════════════════════════════════════════════
-#  HEURISTIC EVALUATION
-# ═══════════════════════════════════════════════════════════════
-def evaluate(board, our_species):
-    """Score in [-10000, +10000]. Positive = good for us."""
-    is_vamp = (our_species == Species.VAMPIRE)
-    our_total = enemy_total = 0
-    our_pos = []
-    enemy_pos = []
-    human_pos = []
-
+def split_board(board: BoardState, species: Species):
+    """One pass over the grid -> (our groups, enemy groups, human groups)."""
+    is_vamp = species == Species.VAMPIRE
+    ours, theirs, humans = [], [], []
     for pos, (h, v, w) in board.grid.items():
-        oc = v if is_vamp else w
-        ec = w if is_vamp else v
-        if oc > 0: our_total += oc;    our_pos.append((pos, oc))
-        if ec > 0: enemy_total += ec;  enemy_pos.append((pos, ec))
-        if h  > 0: human_pos.append((pos, h))
+        if h:
+            humans.append((pos, h))
+        mine, enemy = (v, w) if is_vamp else (w, v)
+        if mine:
+            ours.append((pos, mine))
+        if enemy:
+            theirs.append((pos, enemy))
+    return ours, theirs, humans
 
-    if our_total   == 0: return -10000.0
-    if enemy_total == 0: return  10000.0
 
-    score = float(our_total - enemy_total) * 10.0
+def race_projection(board: BoardState, us: Species, to_move: Species, discount=0.95):
+    """
+    Predicts both final army sizes by letting each side race for the houses it
+    reaches first, and killing any group a 1.5x-bigger adjacent enemy can hit on
+    the mover's turn.
+    """
+    them = _opp(us)
+    ours, theirs, humans = split_board(board, us)
 
-    # Human proximity bonus
-    for (ox, oy), _ in our_pos:
-        for (hx, hy), hc in human_pos:
-            dist = max(abs(ox - hx), abs(oy - hy))
-            score += hc * (4.0 / (dist + 1))
+    victims, hunters = (theirs, ours) if to_move == us else (ours, theirs)
+    survivors = [(vp, vc) for vp, vc in victims
+                 if not any(hc >= 1.5 * vc and chebyshev_dist(vp, hp) == 1
+                            for hp, hc in hunters)]
+    if to_move == us:
+        theirs = survivors
+    else:
+        ours = survivors
 
-    # Danger penalty
-    for (ox, oy), oc in our_pos:
-        for (ex, ey), ec in enemy_pos:
-            dist = max(abs(ox - ex), abs(oy - ey))
-            if dist <= 2 and ec >= 1.5 * oc:
-                score -= 60.0
+    # runner = [pos, count, clock, is_ours]; side to move gets a head start
+    runners = [[p, c, 0.0 if to_move == us else 0.5, True] for p, c in ours]
+    runners += [[p, c, 0.0 if to_move == them else 0.5, False] for p, c in theirs]
+    remaining_plies = max(1, board.max_turns - board.turn_count)
+    horizon = remaining_plies / 2.0
 
+    proj_us, proj_them = float(sum(c for _, c in ours)), float(sum(c for _, c in theirs))
+    pool = dict(humans)
+
+    while pool and runners:
+        best = None                      # (arrival, runner, house_pos)
+        for r in runners:
+            rpos, rcnt, rclock = r[0], r[1], r[2]
+            for hpos, hcnt in pool.items():
+                if rcnt < hcnt:
+                    continue
+                arrival = rclock + chebyshev_dist(rpos, hpos)
+                if best is None or arrival < best[0]:
+                    best = (arrival, r, hpos)
+        if best is None or best[0] > horizon:
+            break
+        arrival, r, hpos = best
+        gain = pool.pop(hpos)
+        r[0], r[1], r[2] = hpos, r[1] + gain, arrival
+        weighted = gain * (discount ** arrival)
+        if r[3]:
+            proj_us += weighted
+        else:
+            proj_them += weighted
+
+    return proj_us, proj_them
+
+
+def evaluate(board: BoardState, us: Species, to_move: Species) -> float:
+    """Score in [0, 1]; 1 means we win."""
+    over, winner = board.is_game_over()
+    if over:
+        return 0.5 if winner is None else float(winner == us)
+
+    pu, pe = race_projection(board, us, to_move)
+    if pu <= 0:
+        return 0.0
+    if pe <= 0:
+        return 1.0
+    score = pu / (pu + pe)
+    if pu >= 1.5 * pe:
+        score = (score + 1.0) / 2.0      # bonus: we can wipe them out for free
+    elif pe >= 1.5 * pu:
+        score = score / 2.0              # they can wipe us out for free
     return score
 
 
 # ═══════════════════════════════════════════════════════════════
-#  MCTS NODE
+#  CANDIDATE WHOLE-TURN PLANS
+# ═══════════════════════════════════════════════════════════════
+def _step_toward(board: BoardState, src: Pos, goal: Pos, count: int,
+                  forbidden: set, threats: List[Tuple[Pos, int]]) -> Optional[Pos]:
+    """One step towards goal, avoiding forbidden cells (Rule 5) and bad fights."""
+    best, best_key = None, None
+    for n in board.get_neighbors(src):
+        if n in forbidden:
+            continue
+        danger = sum(tc for tp, tc in threats
+                     if tc >= 1.5 * count and chebyshev_dist(n, tp) <= 1 and n != goal)
+        key = (danger, chebyshev_dist(n, goal),
+               abs(n[0] - goal[0]) + abs(n[1] - goal[1]))
+        if best_key is None or key < best_key:
+            best, best_key = n, key
+    return best
+
+
+def _group_goals(board: BoardState, pos: Pos, count: int,
+                  friends: List[Tuple[Pos, int]], enemies: List[Tuple[Pos, int]],
+                  humans: List[Tuple[Pos, int]]) -> List[Tuple[float, Pos]]:
+    """Where one group could go, best first, as (value, cell)."""
+    goals: List[Tuple[float, Pos]] = []
+    for hpos, hcnt in humans:
+        if count >= hcnt:                        # enough to convert
+            d = chebyshev_dist(pos, hpos)
+            goals.append((hcnt / (d + 0.5), hpos))
+    for epos, ecnt in enemies:
+        if count >= 1.5 * ecnt:                  # safe kill
+            d = chebyshev_dist(pos, epos)
+            goals.append((1.2 * ecnt / (d + 0.5), epos))
+    if friends:                                  # regroup with closest friend
+        fpos, fcnt = min(friends, key=lambda f: chebyshev_dist(pos, f[0]))
+        d = chebyshev_dist(pos, fpos)
+        goals.append((0.3 * fcnt / (d + 0.5), fpos))
+    dangerous = [(e, c) for e, c in enemies
+                 if c >= 1.5 * count and chebyshev_dist(pos, e) <= 3]
+    if dangerous:                                 # run away
+        flee = max(board.get_neighbors(pos),
+                   key=lambda n: min(chebyshev_dist(n, e) for e, _ in dangerous))
+        goals.append((0.5 * count, flee))
+    if not goals and enemies:                     # nothing to do -> chase enemy
+        epos, _ = min(enemies, key=lambda e: chebyshev_dist(pos, e[0]))
+        goals.append((0.01, epos))
+    if not goals:
+        goals.append((0.0, (board.cols // 2, board.rows // 2)))
+    goals.sort(key=lambda g: -g[0])
+    return goals
+
+
+def _build_turn(board: BoardState, choices: Dict[Pos, Pos],
+                 groups: List[Tuple[Pos, int]], enemies: List[Tuple[Pos, int]]) -> List[Move]:
+    """{group pos: goal} -> list of moves, one step each."""
+    sources = {p for p, _ in groups}
+    moves: List[Move] = []
+    for pos, count in groups:
+        goal = choices.get(pos)
+        if goal is None:
+            continue
+        dst = _step_toward(board, pos, goal, count, sources, enemies)
+        if dst is not None:
+            moves.append((pos[0], pos[1], count, dst[0], dst[1]))
+    return moves
+
+
+def generate_plans(board: BoardState, species: Species, max_plans: int = MAX_PLANS) -> List[List[Move]]:
+    """Short list of full turns for the tree to compare (not every possible move)."""
+    groups, enemies, humans = split_board(board, species)
+    if not groups:
+        return []
+
+    per_group = {}                               # top 3 goals of each group
+    for pos, cnt in groups:
+        friends = [(p, c) for p, c in groups if p != pos]
+        per_group[pos] = _group_goals(board, pos, cnt, friends, enemies, humans)[:3]
+
+    plans: List[List[Move]] = []
+    seen = set()
+
+    def add(moves: List[Move]):
+        key = tuple(sorted(moves))
+        if moves and key not in seen:             # skip empty / duplicate plans
+            seen.add(key)
+            plans.append(moves)
+
+    # every group goes to its best goal
+    default = {pos: goals[0][1] for pos, goals in per_group.items()}
+    add(_build_turn(board, default, groups, enemies))
+
+    # same but one group takes its 2nd or 3rd choice
+    for pos, goals in per_group.items():
+        for _, alt in goals[1:]:
+            choice = dict(default)
+            choice[pos] = alt
+            add(_build_turn(board, choice, groups, enemies))
+
+    # everyone joins the biggest group
+    if len(groups) > 1:
+        big_pos = max(groups, key=lambda g: g[1])[0]
+        regroup = {pos: big_pos for pos, _ in groups if pos != big_pos}
+        add(_build_turn(board, regroup, groups, enemies))
+
+    # splits: e.g. 7 -> 3 to a house of 3 and 4 to a house of 4
+    sources = {p for p, _ in groups}
+    for pos, cnt in groups:
+        if cnt < 2:
+            continue
+        options = []
+        for i, (h1, c1) in enumerate(humans):
+            for h2, c2 in humans[i + 1:]:
+                for (ha, ca), (hb, cb) in (((h1, c1), (h2, c2)), ((h2, c2), (h1, c1))):
+                    if ca <= cnt - cb and cb <= cnt - ca:    # both halves big enough
+                        d = chebyshev_dist(pos, ha) + chebyshev_dist(pos, hb)
+                        options.append(((ca + cb) / (d + 1.0), ha, ca, hb))
+        options.sort(key=lambda o: -o[0])
+        for _, ha, ca, hb in options[:2]:        # keep the 2 best splits
+            dst_a = _step_toward(board, pos, ha, ca, sources, enemies)
+            dst_b = _step_toward(board, pos, hb, cnt - ca, sources | {dst_a}, enemies)
+            if dst_a is None or dst_b is None:
+                continue
+            split = [(pos[0], pos[1], ca, dst_a[0], dst_a[1]),
+                     (pos[0], pos[1], cnt - ca, dst_b[0], dst_b[1])]
+            others = {p: g for p, g in default.items() if p != pos}
+            rest = _build_turn(board, others,
+                               [(p, c) for p, c in groups if p != pos], enemies)
+            rest = [m for m in rest if (m[3], m[4]) != pos]  # can't move into the split cell
+            add(split + rest)
+
+    if not plans:                                # fallback: any legal move
+        pos, cnt = groups[0]
+        for n in board.get_neighbors(pos):
+            if n not in sources:
+                plans.append([(pos[0], pos[1], cnt, n[0], n[1])])
+                break
+    return plans[:max_plans]
+
+
+def rollout_plan(board: BoardState, species: Species, epsilon: float = 0.15) -> List[Move]:
+    """Moves used in the imaginary games: greedy, with a bit of randomness."""
+    groups, enemies, humans = split_board(board, species)
+    if not groups:
+        return []
+    choices = {}
+    for pos, cnt in groups:
+        friends = [(p, c) for p, c in groups if p != pos]
+        goals = _group_goals(board, pos, cnt, friends, enemies, humans)
+        if len(goals) > 1 and random.random() < epsilon:
+            choices[pos] = goals[1][1]           # sometimes take the 2nd best
+        else:
+            choices[pos] = goals[0][1]
+    return _build_turn(board, choices, groups, enemies)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  MCTS OVER WHOLE-TURN PLANS  (runs inside each subprocess)
 # ═══════════════════════════════════════════════════════════════
 class MCTSNode:
-    __slots__ = ('parent', 'move', 'children', 'wins', 'visits',
-                 'board', 'turn_species', 'num_expanded')
+    __slots__ = ('moves', 'mover', 'parent', 'children', 'untried', 'visits', 'value')
 
-    def __init__(self, board, turn_species, parent=None, move=None):
-        self.parent       = parent
-        self.move         = move
-        self.children     = []
-        self.wins         = 0.0
-        self.visits       = 0
-        self.board        = board
-        self.turn_species = turn_species
-        self.num_expanded = 0
-
-    def uct_score(self):
-        if self.visits == 0:
-            return float('inf')
-        return (self.wins / self.visits +
-                UCT_C * math.sqrt(math.log(self.parent.visits) / self.visits))
-
-    def best_uct_child(self):
-        return max(self.children, key=lambda c: c.uct_score())
-
-    def most_visited_child(self):
-        return max(self.children, key=lambda c: c.visits)
-
-    def can_expand(self):
-        over, _ = self.board.is_game_over()
-        return (not over) and (self.num_expanded < MAX_CHILDREN)
+    def __init__(self, moves: Optional[List[Move]], mover: Optional[Species],
+                 parent: Optional['MCTSNode']):
+        self.moves = moves                       # the plan played to get here
+        self.mover = mover                        # who played it
+        self.parent = parent
+        self.children: List['MCTSNode'] = []
+        self.untried: Optional[List[List[Move]]] = None   # filled on first visit
+        self.visits = 0
+        self.value = 0.0                          # sum of scores, from our side
 
 
-# ═══════════════════════════════════════════════════════════════
-#  MCTS PHASES
-# ═══════════════════════════════════════════════════════════════
-def _select(root):
-    node = root
-    while node.children and not node.can_expand():
-        over, _ = node.board.is_game_over()
-        if over:
+def _select_child(node: MCTSNode, us: Species) -> MCTSNode:
+    # UCB1 = avg score + c * sqrt(ln(N) / n)
+    log_n = math.log(node.visits)
+    best, best_ucb = None, -1.0
+    for child in node.children:
+        avg = child.value / child.visits
+        if child.mover != us:
+            avg = 1.0 - avg                       # opponent picks what's best for them
+        ucb = avg + UCT_C * math.sqrt(log_n / child.visits)
+        if ucb > best_ucb:
+            best, best_ucb = child, ucb
+    return best
+
+
+def _rollout(board: BoardState, to_move: Species, us: Species) -> float:
+    # short imaginary game with real dice, then score it
+    for _ in range(ROLLOUT_PLIES):
+        if board.is_game_over()[0]:
             break
-        node = node.best_uct_child()
-    return node
-
-
-def _expand(node):
-    over, _ = node.board.is_game_over()
-    if over:
-        return node
-    move = sample_combined_move(node.board, node.turn_species, bias_smart=False)
-    if not move:
-        return node
-    try:
-        new_board = node.board.apply_moves(move, node.turn_species, deterministic=True)
-    except Exception:
-        return node
-    child = MCTSNode(new_board, _opposite(node.turn_species), parent=node, move=move)
-    node.children.append(child)
-    node.num_expanded += 1
-    return child
-
-
-def _rollout(node, our_species):
-    board   = node.board
-    species = node.turn_species
-
-    for _ in range(MAX_ROLLOUT_DEPTH):
-        over, winner = board.is_game_over()
-        if over:
-            if winner == our_species: return 1.0
-            if winner is None:        return 0.5
-            return 0.0
-        move = sample_combined_move(board, species, bias_smart=True)
-        if not move:
+        moves = rollout_plan(board, to_move)
+        if not moves:
             break
-        try:
-            board = board.apply_moves(move, species, deterministic=False)
-        except Exception:
+        board = board.apply_moves(moves, to_move, deterministic=False)
+        to_move = _opp(to_move)
+    return evaluate(board, us, to_move)
+
+
+def _run_iteration(root: MCTSNode, root_board: BoardState, us: Species):
+    node, board, to_move = root, root_board, us
+
+    # 1. selection
+    while node.untried is not None and not node.untried and node.children:
+        child = _select_child(node, us)
+        # boards aren't stored, moves are replayed with new dice each time,
+        # so a stored plan can become illegal (group smaller or dead)
+        valid, _ = board.validate_moves(child.moves, to_move)
+        if not valid:
             break
-        species = _opposite(species)
+        board = board.apply_moves(child.moves, to_move, deterministic=False)
+        node, to_move = child, _opp(to_move)
 
-    score = evaluate(board, our_species)
-    if   score >  100: return 1.0
-    elif score < -100: return 0.0
-    else:              return 0.5
+    # 2. expansion
+    if not board.is_game_over()[0]:
+        if node.untried is None:
+            node.untried = generate_plans(board, to_move)
+            random.shuffle(node.untried)
+        while node.untried:
+            moves = node.untried.pop()
+            if board.validate_moves(moves, to_move)[0]:
+                child = MCTSNode(moves, to_move, node)
+                node.children.append(child)
+                board = board.apply_moves(moves, to_move, deterministic=False)
+                node, to_move = child, _opp(to_move)
+                break
 
+    # 3. simulation
+    score = _rollout(board, to_move, us)
 
-def _backpropagate(node, result, our_species):
+    # 4. backpropagation
     while node is not None:
         node.visits += 1
-        node.wins   += result if node.turn_species == our_species else (1.0 - result)
+        node.value += score
         node = node.parent
 
 
-# ═══════════════════════════════════════════════════════════════
-#  SINGLE-CORE MCTS  (runs inside each subprocess)
-# ═══════════════════════════════════════════════════════════════
-def mcts_search(snapshot, time_limit, seed):
-    """
-    TOP-LEVEL function — must be top-level for multiprocessing pickle.
-    Runs one complete MCTS tree and returns visit statistics.
-    """
+def mcts_search(snapshot: StateSnapshot, time_limit: float, seed: int) -> dict:
+    """TOP-LEVEL function — must be top-level for multiprocessing pickle."""
     random.seed(seed)
-
-    # Make sure project modules are importable inside the subprocess
     proj = os.path.dirname(os.path.abspath(__file__))
     if proj not in sys.path:
         sys.path.insert(0, proj)
 
-    board       = snapshot.to_board_state()
-    our_species = snapshot.our_species
-    root        = MCTSNode(board, our_species)
-    end_time    = time.time() + time_limit
-    iters       = 0
+    board = snapshot.to_board_state()
+    us = snapshot.our_species
+    plans = [p for p in generate_plans(board, us) if board.validate_moves(p, us)[0]]
+    if not plans:
+        return {'best_move': None, 'move_visits': {}, 'moves': {}, 'iterations': 0}
+    if len(plans) == 1:
+        k = _move_key(plans[0])
+        return {'best_move': plans[0], 'move_visits': {k: 1}, 'moves': {k: plans[0]}, 'iterations': 0}
 
+    root = MCTSNode(None, None, None)
+    root.untried = list(plans)
+    random.shuffle(root.untried)
+
+    end_time = time.time() + time_limit
+    iterations = 0
     while time.time() < end_time:
-        leaf   = _select(root)
-        child  = _expand(leaf)
-        result = _rollout(child, our_species)
-        _backpropagate(child, result, our_species)
-        iters += 1
+        _run_iteration(root, board, us)
+        iterations += 1
 
     if not root.children:
-        return {'best_move': None, 'move_visits': {}, 'best_key': '', 'iterations': iters}
+        return {'best_move': plans[0], 'move_visits': {}, 'moves': {}, 'iterations': iterations}
 
-    best_child = root.most_visited_child()
-    best_move  = best_child.move
-    best_key   = _move_to_key(best_move)
-
-    move_visits = {}
+    move_visits, move_reg = {}, {}
     for c in root.children:
-        k = _move_to_key(c.move)
+        k = _move_key(c.moves)
         move_visits[k] = move_visits.get(k, 0) + c.visits
-
-    return {'best_move': best_move, 'move_visits': move_visits,
-            'best_key': best_key, 'iterations': iters}
+        move_reg[k] = c.moves
+    best_key = max(move_visits, key=move_visits.get)
+    return {'best_move': move_reg[best_key], 'move_visits': move_visits,
+            'moves': move_reg, 'iterations': iterations}
 
 
 # ═══════════════════════════════════════════════════════════════
 #  ROOT-PARALLEL MCTS  (orchestrates all cores)
 # ═══════════════════════════════════════════════════════════════
-def parallel_mcts(snapshot, time_limit, num_cores):
-    """
-    Launches `num_cores` independent MCTS trees simultaneously.
+def _warmup(_):
+    time.sleep(0.05)
+    return 0
 
-        Core 1 → MCTS tree (seed=0) → best_move + visit_counts
-        Core 2 → MCTS tree (seed=1) → best_move + visit_counts  ─→ aggregate → FINAL
-        Core 3 → MCTS tree (seed=2) → best_move + visit_counts
-        ...
 
-    Aggregate = sum visit counts across all trees, pick highest.
-    """
+def parallel_mcts(snapshot: StateSnapshot, time_limit: float, num_cores: int, executor):
+    """Sums root-plan visit counts across independent trees, returns the top plan."""
+    futures = {executor.submit(mcts_search, snapshot, time_limit, i): i
+               for i in range(num_cores)}
     results = []
-    with ProcessPoolExecutor(max_workers=num_cores) as executor:
-        futures = {executor.submit(mcts_search, snapshot, time_limit, i): i
-                   for i in range(num_cores)}
-        for f in as_completed(futures):
-            try:
-                results.append(f.result())
-            except Exception as e:
-                print(f"[PMCTS] Worker {futures[f]} error: {e}")
+    for f in as_completed(futures):
+        try:
+            results.append(f.result())
+        except BrokenProcessPool:
+            raise
+        except Exception as e:
+            print(f"[PMCTS] Worker {futures[f]} error: {e}")
 
     if not results:
-        return None
+        return None, None
 
-    combined   = {}
-    move_reg   = {}
-
+    combined, move_reg = {}, {}
     for r in results:
-        bk = r.get('best_key', '')
-        bm = r.get('best_move')
-        if bm and bk and bk not in move_reg:
-            move_reg[bk] = bm
-        for key, visits in r.get('move_visits', {}).items():
-            combined[key] = combined.get(key, 0) + visits
+        move_reg.update(r.get('moves', {}))
+        for k, v in r.get('move_visits', {}).items():
+            combined[k] = combined.get(k, 0) + v
+    total_iters = sum(r.get('iterations', 0) for r in results)
 
     if not combined:
         for r in results:
             if r.get('best_move'):
-                return r['best_move']
-        return None
+                return r['best_move'], {'sims': total_iters, 'top': []}
+        return None, None
 
-    best_key    = max(combined, key=combined.get)
-    total_iters = sum(r.get('iterations', 0) for r in results)
+    ranked = sorted(combined, key=combined.get, reverse=True)[:5]
+    best_key = ranked[0]
     print(f"[PMCTS] {num_cores} cores | {total_iters:,} simulations | "
-          f"Top move visits: {combined[best_key]:,}")
-
-    return move_reg.get(best_key)
+          f"top plan votes: {combined[best_key]:,}")
+    info = {'sims': total_iters, 'top': [(move_reg[k], combined[k]) for k in ranked]}
+    return move_reg.get(best_key), info
 
 
 # ═══════════════════════════════════════════════════════════════
 #  AI AGENT  (entry point called by main.py)
 # ═══════════════════════════════════════════════════════════════
 class AIAgent:
-    def __init__(self, name: str = "ParallelMCTS"):
-        self.name      = name
+    def __init__(self, name: str = "Harsha"):
+        self.name = name
         self.num_cores = NUM_CORES
+        self.last_decision = {}
+        self._pool = None
+        self._start_pool()
         print(f"[AIAgent] '{name}' | Cores: {self.num_cores} | Budget: {TIME_LIMIT}s/turn")
 
-    def compute_moves(self, state: GameState) -> List[Tuple[int,int,int,int,int]]:
-        """Called every turn by main.py. Must return within 2.0 seconds."""
-        if not state.get_our_groups():
+    def _start_pool(self):
+        # Persistent workers: no process start-up cost during the game
+        if self._pool is not None:
+            self._pool.shutdown(wait=False)
+        self._pool = ProcessPoolExecutor(max_workers=self.num_cores)
+        list(self._pool.map(_warmup, range(self.num_cores)))
+
+    def _search(self, snapshot: StateSnapshot):
+        try:
+            return parallel_mcts(snapshot, TIME_LIMIT, self.num_cores, self._pool)
+        except BrokenProcessPool:
+            self._start_pool()
+            return None, None
+
+    @staticmethod
+    def _fallback(board: BoardState, species: Species) -> List[Move]:
+        """Rule 1 needs a move even when the search comes up empty."""
+        groups, enemies, humans = split_board(board, species)
+        if not groups:
             return []
-        if state.our_species is None:
-            return self._greedy_fallback(state)
+        pos, cnt = max(groups, key=lambda g: g[1])
+        targets = [p for p, _ in humans] or [p for p, _ in enemies]
+        sources = {p for p, _ in groups}
+        goal = min(targets, key=lambda t: chebyshev_dist(pos, t)) if targets else pos
+        dst = _step_toward(board, pos, goal, cnt, sources, enemies)
+        if dst is None:
+            for n in board.get_neighbors(pos):
+                if n not in sources:
+                    return [(pos[0], pos[1], cnt, n[0], n[1])]
+            return []
+        return [(pos[0], pos[1], cnt, dst[0], dst[1])]
 
-        snapshot  = game_state_to_snapshot(state)
-        t0        = time.time()
-        best_move = parallel_mcts(snapshot, TIME_LIMIT, self.num_cores)
-        elapsed   = time.time() - t0
+    def compute_moves(self, state_or_board, species: Optional[Species] = None) -> List[Move]:
+        """
+        Dual interface:
+        - From main.py: compute_moves(state: GameState)
+        - From the arena: compute_moves(board: BoardState, species: Species)
+        """
+        if isinstance(state_or_board, BoardState):
+            board, sp = state_or_board, species
+        else:
+            st = state_or_board
+            sp = st.our_species
+            if sp is None or not st.get_our_groups():
+                return []
+            board = BoardState(st.rows, st.cols)
+            board.grid = {pos: (c.humans, c.vampires, c.werewolves) for pos, c in st.board.items()}
 
-        if best_move:
-            print(f"[AIAgent] Decision: {elapsed:.2f}s → {len(best_move)} group moves")
-            return best_move
+        if sp is None or not split_board(board, sp)[0]:
+            return []
 
-        print(f"[AIAgent] MCTS empty ({elapsed:.2f}s) → greedy fallback")
-        return self._greedy_fallback(state)
+        snapshot = StateSnapshot(board.rows, board.cols, dict(board.grid), sp,
+                                 board.turn_count, board.max_turns)
+        t0 = time.time()
+        best, info = self._search(snapshot)
+        elapsed = time.time() - t0
 
-    def _greedy_fallback(self, state: GameState) -> List[Tuple[int,int,int,int,int]]:
-        """Simple greedy: move each group toward nearest human/enemy."""
-        our_groups = state.get_our_groups()
-        targets    = ([p for p, _ in state.get_human_groups()] or
-                      [p for p, _ in state.get_enemy_groups()])
-        sources    = {pos for pos, _ in our_groups}
-        chosen_dst = set()
-        moves      = []
+        if not best:
+            best = self._fallback(board, sp)
+            self.last_decision = {'source': 'fallback', 'move': best}
+            print(f"[AIAgent] MCTS empty ({elapsed:.2f}s) -> fallback")
+            return best
 
-        for (sx, sy), count in our_groups:
-            neighbors = state.get_legal_adjacent_cells((sx, sy))
-            # Rule 5: Destination cannot be a source cell in the same ply
-            valid = [n for n in neighbors if n not in sources]
-            if not valid:
-                continue
-            best = (min(valid, key=lambda n: min(state.chebyshev_dist(n, t) for t in targets))
-                    if targets else random.choice(valid))
-            moves.append((sx, sy, count, best[0], best[1]))
+        self.last_decision = {'source': 'mcts', 'move': best, 'info': info}
+        print(f"[AIAgent] Decision: {elapsed:.2f}s -> {len(best)} group move(s)")
+        if DEBUG and info:
+            for mv, visits in info.get('top', []):
+                tag = "  <-- chosen" if mv == best else ""
+                print(f"[DEBUG] votes={visits:<6} {mv}{tag}")
+        return best
 
-        return moves
