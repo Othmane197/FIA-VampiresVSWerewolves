@@ -110,7 +110,7 @@ in campaign 4 none survived validation. The flagship sits at a local optimum for
 refinements: the next measurable gains need new information or a new mechanism (lesson 4).
 Ranked candidates, from the code review's list (chapter 13 and the review doc) and this campaign:
 
-1. **More thinking time, made safe by the anytime answer.** Half the time costs 25 points (14.3); the client uses 1.5 s of a 2 s limit, and a late search now hands over its best plan instead of a naive step. A test of 1.6 to 1.7 s (with real-conditions matches for timeouts) is the cheapest likely gain, for both models.
+1. **More thinking time, made safe by the anytime answer.** Half the time costs 25 points (14.3); the client uses 1.5 s of a 2 s limit, and a late search now hands over its best plan instead of a naive step. A test of 1.6 to 1.7 s (with real-conditions matches for timeouts) is the cheapest likely gain, for both models. *Tested in campaign 5 (18.4): 1.7 s gave −7.5 ± 5.7 on the flagship's screen and was not adopted.*
 2. **A contact solver** (code review rank 4): exact expectimax over 2 to 3 plies for groups within 2 cells of an enemy, as extra protected plans. The standoffs and coin flips of 17.4 are where the games are decided.
 3. **A learned evaluation** (rank 7): a logistic model on board features, trained on games with exploration, checked on hold-out games first.
 4. **An endgame solver** (rank 12) for few groups and no humans.

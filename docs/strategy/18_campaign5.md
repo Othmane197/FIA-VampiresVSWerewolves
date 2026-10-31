@@ -44,7 +44,7 @@ Everything else Harsha has, our flagship already has (campaign 3 merged RaceMCTS
 
 - **Harsha in the arena:** `Harsha-1core` runs one of Harsha's trees in-process with its own settings (its process pool cannot run inside the arena). Its full multi-core client is measured over the real protocol (run D2), from a copy of his branch whose pool is capped at 3 processes (`HARSHA_CORES`; the original uses all cores but one), so that the laptop stays usable.
 - **Othmane's Apex V3.1** (25 October, "dynamic multi-splitting, battle EV correction and horizon calibration") is the current `Apex-live`.
-- **New data:** map families **`fresh3`** (validation) and **`fresh4`** (final ladder), 8 maps each, seeds 401–408 and 501–508; styles **Styled:19–24** (validation) and **Styled:25–30** (ladder). None was used before.
+- **New data:** map families **`fresh3`** (validation) and **`fresh4`** (final ladder), 8 maps each, seeds 401–408 and 501–508; styles **Styled:19–24** (validation) and **Styled:25–30** (ladder). None was used before. The validation did not run (nothing passed the screen), so `fresh3` and Styled:19–24 are **still unused**.
 
 ## 18.3 Decision rules, written before the games
 
@@ -155,12 +155,28 @@ generator pools by design. Coin flips in standoffs of equal armies decided a lar
 backup's losses to RaceMCTS-live (17.4), and most lost games end in a wipeout after the house
 race (16.6).
 
+**The gap found by the D2 replays (18.4) is far more frequent.** It occurs once no humans are
+left: a group of ours is destroyed by a sure kill while our total, merged, would have been safe
+from every enemy group. Counted from the logs of the games not won, with the same method:
+
+| Run | Flagship | Backup (Classic) | v5 |
+|---|---|---|---|
+| Ladder (`fresh4`, 160 games each) | **25 of 83** groups lost, in 18 of 52 games | 7 of 50, in 5 of 70 games | 13 of 62, in 10 of 71 games |
+| Campaign 4 validation (`fresh2`) | 25 of 113, in 21 of 125 games | 24 of 101, in 19 of 166 games | — |
+
+Half of the flagship's ladder cases (12 of 25) were against the live bots. In only 5 of them was
+a friendly group within 2 cells, so the fix is not just "merge when adjacent". The weakness
+must be valued earlier: a group that a bigger enemy group can sure-kill, once no humans are
+left, will be caught, because one pursuer always corners a single group on a king-move board.
+Apex's endgame search sees this; our 6-ply rollouts do not.
+
 **Plan, ranked by expected gain against intelligent opponents per unit of work:**
 
-1. **Contact solver with chance nodes** (Dana's expectiminimax, code review rank 4). For our groups within 2 cells of an enemy: enumerate strike / step away / hold / merge, score each with the exact battle-outcome distribution (`rules.win_probability` and binomial survivors) over 2–3 plies, opponent replies included, and add the best one or two as protected "contact" plans; MCTS still decides. *Reliability:* puzzles from the stored losses first (the 21% strike, the cornered 23-vs-23, the pooled kills), then a screen, a validation on an unused map family, real conditions; a hard time cap (abandon the solver past 20% of the budget).
-2. **Transit depth** (Apex's transit pruning, translated to MCTS): in positions where no enemy is within 4 cells, roll out deeper (6 plies) with the cheap quick policy, since the branching there is tiny. *Reliability:* measure iterations per move first (a cost cap of 10%), then the usual screen and validation.
-3. **Pooled threats** (Dana): count pooled enemy strikes in `exposure` and in `safe_step`'s danger, and let the tree's opponent plan pooled sure kills. *Reliability:* only after 1 and 2, since it acts in 0.4% of losses; puzzles first, then a large validation or a position-level test.
-4. **Endgame solver** (Apex's alpha-beta): with no humans and at most 3 groups per side, a depth-limited exact search replaces MCTS. *Reliability:* compare with MCTS on stored endgame positions before any game.
+1. **Hunted groups in the endgame** (from the D2 replays; a cheap form of Apex's endgame search). In `evaluate`, once no humans are left, count a group as lost (weight λ, first λ = 0.5) when some enemy group is at least 1.5 times its size and none of our groups can sure-kill that enemy in turn. Apply the same term to the enemy, so that hunting their stray splinters also gains value. This makes regrouping, and not splitting late, visible to the search without deeper rollouts. *Reliability:* the position of 18.4 (6 + 2 against 9, thetrap after ply 15) as a puzzle (merge, or at least do not separate), together with the existing puzzles. Then the 300-position comparison with the frozen flagship (how many decisions change, and where), a screen at λ ∈ {0.3, 0.5, 1.0}, a validation on still-unused data (`fresh3` and Styled:19–24, reserved for this campaign's validation, which did not run; `fresh4` is now seen), and real conditions. Cost: one pass over the groups per evaluation, so no measurable loss of iterations.
+2. **Contact solver with chance nodes** (Dana's expectiminimax, code review rank 4). For our groups within 2 cells of an enemy: enumerate strike / step away / hold / merge, score each with the exact battle-outcome distribution (`rules.win_probability` and binomial survivors) over 2–3 plies, opponent replies included, and add the best one or two as protected "contact" plans; MCTS still decides. *Reliability:* puzzles from the stored losses first (the 21% strike, the cornered 23-vs-23, the pooled kills), then a screen, a validation on an unused map family, real conditions; a hard time cap (abandon the solver past 20% of the budget).
+3. **Transit depth** (Apex's transit pruning, translated to MCTS): in positions where no enemy is within 4 cells, roll out deeper (6 plies) with the cheap quick policy, since the branching there is tiny. *Reliability:* measure iterations per move first (a cost cap of 10%), then the usual screen and validation.
+4. **Endgame solver** (Apex's alpha-beta): with no humans and at most 3 groups per side, a depth-limited exact search replaces MCTS. It is the full version of item 1, worth building only if item 1 shows that endgames decide games. *Reliability:* compare with MCTS on stored endgame positions before any game.
+5. **Pooled threats** (Dana): count pooled enemy strikes in `exposure` and in `safe_step`'s danger, and let the tree's opponent plan pooled sure kills. *Reliability:* last, since it acts in 0.4% of losses; puzzles first, then a large validation or a position-level test.
 
 Each item goes through the method of campaigns 3–5 (rules written first, tuning screen, a new
 map family for validation, the 1.5 SE bar, real conditions), with the flagship's frozen

@@ -54,7 +54,7 @@ large or replicated differences mean anything there.
 
 | Parameter | Value | Meaning | Evidence |
 |---|---|---|---|
-| `c` | 0.6 | UCT exploration constant | 0.4: −0.9, 0.9: −3.0 (A) |
+| `c` | 0.6 | UCT exploration constant | 0.4: −0.9, 0.9: −3.0 (A); on the flagship, 0.9: **−17.8 ± 7.5** (18.4) |
 | `prior_bias` | 0.6 | Weight of the planner's prior (progressive bias) | 0.2: −0.9, 1.2: +1.8 (A) |
 | `rollout_depth` | 2 | Greedy plies after the tree, before `evaluate` | 0: +3.6, 4: **−6.0** (A); 0 combined with kiting failed validation |
 | `widen_k`, `widen_alpha` | 2.0, 0.5 | Children allowed = k·√(N+1) (root fully expanded) | k = 1: +2.4, k = 4: +2.7 (A) |
@@ -65,7 +65,7 @@ large or replicated differences mean anything there.
 
 | Parameter | Value | Meaning |
 |---|---|---|
-| `time_limit` | 1.5 s (env `SPLITTER_TIME`) | Budget per move; the server allows 2 s |
+| `time_limit` | 1.5 s (env `SPLITTER_TIME`) | Budget per move; the server allows 2 s. 0.75 s: −25.0 ± 10.9 (14.3); 1.7 s: −7.5 ± 5.7 (18.4) |
 | `search` | "mcts" | "greedy" = play the planner's top plan |
 | `max_ply` | 200 | The server's `MaxPlays` (plies in total) |
 | `game_seconds` | 300 | The server's `MaxGameDuration`, used to estimate the plies left (None in the arena) |
@@ -85,7 +85,7 @@ Off by default (the backup uses none); the flagship turns on the eight marked be
 |---|---|---|---|---|
 | `rollout_policy` | "quick" (**"race"**) | `MCTS` | RaceMCTS's stochastic goal policy in rollouts, on our exact rules | Part of Splitter-R: +6.2 ± 4.6 (hold-out + live bots), +5.9 ± 4.1 (fresh maps) |
 | `rollout_strike` | 0.0 (**0.45**) | `MCTS` | In race rollouts, strike first from these odds (both sides) | idem |
-| `rollout_depth_contact` | 0 (**6**) | `MCTS` | Rollout depth when opposing groups are within `contact_radius` = 3 cells or no humans are left | Uniform depth 4 / 8: +1.7 / +0.8 (16.4) |
+| `rollout_depth_contact` | 0 (**6**) | `MCTS` | Rollout depth when opposing groups are within `contact_radius` = 3 cells or no humans are left | Uniform depth 4 / 8: +1.7 / +0.8 (16.4); contact depth 8: −11.7 ± 6.5 (18.4) |
 | `leaf_mix` | 1.0 (**0.5**) | `MCTS` | Leaf value = (1 − mix) · before the rollout + mix · after | Part of Splitter-R |
 | `race_root` | False (**True**) | agent | RaceMCTS-style plans added at the root, at half the top prior | Ablation −1.7 ± 6.6 without vs −0.8 with (screen, 16.4) |
 | `bait_check` | False (**True**) | `PlanConfig` | Discount kills whose victim cell sits next to another strong enemy | Puzzle test; part of Splitter-R |

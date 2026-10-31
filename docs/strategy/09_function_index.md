@@ -201,39 +201,39 @@ Chapters 01–08 explain *why*; this page answers *where*.
 | `write_xml` | function | [43](../../arena/maps.py#L43) | Save a State as a server map file, so the real GUI can load it. |
 | `_cheb` | function | [58](../../arena/maps.py#L58) | King-move distance (local copy, keeps this module independent). |
 | `symmetric_map` | function | [63](../../arena/maps.py#L63) | Random point-symmetric map: mirrored starts and mirrored houses of equal size. |
-| `build_suite` | function | [160](../../arena/maps.py#L160) | name: 'all' (the 14 tuning maps), 'given', a family name ('holdout' = validation only, |
-| `render` | function | [189](../../arena/maps.py#L189) | ASCII board: V12 / W7 / H4, '.' empty. |
+| `build_suite` | function | [182](../../arena/maps.py#L182) | name: 'all' (the 14 tuning maps), 'given', a family name ('holdout' = validation only, |
+| `render` | function | [214](../../arena/maps.py#L214) | ASCII board: V12 / W7 / H4, '.' empty. |
 
 ### [arena/opponents.py](../../arena/opponents.py)
 
 | Name | Kind | Line | Purpose (first docstring line) |
 |---|---|---|---|
-| `_species` | function | [52](../../arena/opponents.py#L52) | V / W -> game_state.Species. |
-| `load_vendor` | function | [57](../../arena/opponents.py#L57) | Import `modules` from arena/vendor/<branch> without clashing with the repo's modules. |
-| `Bot` | class | [81](../../arena/opponents.py#L81) | Common interface of every arena bot: reset() and play(state, side) -> moves. |
-| `Bot.reset` | method | [85](../../arena/opponents.py#L85) | Prepare for a new game. |
-| `Bot.play` | method | [88](../../arena/opponents.py#L88) | Moves for `side` in `state` (implemented by the adapters). |
-| `GameStateBot` | class | [93](../../arena/opponents.py#L93) | Adapter for agents with compute_moves(GameState) (repo starter, Dana's bots, AIAgent). |
-| `GameStateBot.__init__` | method | [95](../../arena/opponents.py#L95) | Wrap an agent factory; a fresh agent is built for every game. |
-| `GameStateBot.reset` | method | [102](../../arena/opponents.py#L102) | Fresh agent instance for a new game. |
-| `GameStateBot.play` | method | [107](../../arena/opponents.py#L107) | Convert the State to a GameState and ask the agent. |
-| `BoardBot` | class | [115](../../arena/opponents.py#L115) | Adapter for agents with compute_moves(BoardState, Species) (Othmane's and Ronita's bots). |
-| `BoardBot.__init__` | method | [117](../../arena/opponents.py#L117) | Wrap an agent factory; a fresh agent is built for every game. |
-| `BoardBot.reset` | method | [123](../../arena/opponents.py#L123) | Fresh agent instance for a new game. |
-| `BoardBot.play` | method | [127](../../arena/opponents.py#L127) | Convert the State to a BoardState and ask the agent. |
-| `SplitterBot` | class | [132](../../arena/opponents.py#L132) | Our bot through its fast choose(State, side) interface. |
-| `SplitterBot.__init__` | method | [134](../../arena/opponents.py#L134) | SplitterAgent with the given keyword arguments (game clock disabled in the arena). |
-| `SplitterBot.reset` | method | [141](../../arena/opponents.py#L141) | Forget the previous game. |
-| `SplitterBot.play` | method | [145](../../arena/opponents.py#L145) | Moves chosen by the SplitterAgent. |
-| `_parse_value` | function | [150](../../arena/opponents.py#L150) | '3' -> 3, '0.5' -> 0.5, 'true' -> True, else the string (for 'Splitter:key=value'). |
-| `_registry` | function | [161](../../arena/opponents.py#L161) | name -> builder(time_limit) for every non-Splitter bot (teammates' bots are loaded lazily). |
-| `_models` | function | [235](../../arena/opponents.py#L235) | The two kept models, named for the arena (defined once, in splitter/agent.py). |
-| `styled_config` | function | [244](../../arena/opponents.py#L244) | Opponent style number n (deterministic): random risk taking, splitting, caution, search depth. |
-| `bot_names` | function | [273](../../arena/opponents.py#L273) | Every bot name make_bot() accepts. |
-| `SnapshotBot` | class | [278](../../arena/opponents.py#L278) | A frozen copy of splitter/ (arena/snapshots/splitter_<version>), see arena/snapshot.py. |
-| `SnapshotBot.__init__` | method | [281](../../arena/opponents.py#L281) | SplitterAgent imported from arena/snapshots/splitter_<version>/. |
-| `load_external` | function | [289](../../arena/opponents.py#L289) | 'py:<path>[:ClassName]' -> a Bot around an external Python agent class. Without ClassName the |
-| `make_bot` | function | [332](../../arena/opponents.py#L332) | spec: registry name, Splitter variant, 'Splitter:k=v,..', 'Snap:<version>[:k=v,..]' or 'py:<file>[:Class]'. |
+| `_species` | function | [53](../../arena/opponents.py#L53) | V / W -> game_state.Species. |
+| `load_vendor` | function | [58](../../arena/opponents.py#L58) | Import `modules` from arena/vendor/<branch> without clashing with the repo's modules. |
+| `Bot` | class | [82](../../arena/opponents.py#L82) | Common interface of every arena bot: reset() and play(state, side) -> moves. |
+| `Bot.reset` | method | [86](../../arena/opponents.py#L86) | Prepare for a new game. |
+| `Bot.play` | method | [89](../../arena/opponents.py#L89) | Moves for `side` in `state` (implemented by the adapters). |
+| `GameStateBot` | class | [94](../../arena/opponents.py#L94) | Adapter for agents with compute_moves(GameState) (repo starter, Dana's bots, AIAgent). |
+| `GameStateBot.__init__` | method | [96](../../arena/opponents.py#L96) | Wrap an agent factory; a fresh agent is built for every game. |
+| `GameStateBot.reset` | method | [103](../../arena/opponents.py#L103) | Fresh agent instance for a new game. |
+| `GameStateBot.play` | method | [108](../../arena/opponents.py#L108) | Convert the State to a GameState and ask the agent. |
+| `BoardBot` | class | [116](../../arena/opponents.py#L116) | Adapter for agents with compute_moves(BoardState, Species) (Othmane's and Ronita's bots). |
+| `BoardBot.__init__` | method | [118](../../arena/opponents.py#L118) | Wrap an agent factory; a fresh agent is built for every game. |
+| `BoardBot.reset` | method | [124](../../arena/opponents.py#L124) | Fresh agent instance for a new game. |
+| `BoardBot.play` | method | [128](../../arena/opponents.py#L128) | Convert the State to a BoardState and ask the agent. |
+| `SplitterBot` | class | [133](../../arena/opponents.py#L133) | Our bot through its fast choose(State, side) interface. |
+| `SplitterBot.__init__` | method | [135](../../arena/opponents.py#L135) | SplitterAgent with the given keyword arguments (game clock disabled in the arena). |
+| `SplitterBot.reset` | method | [142](../../arena/opponents.py#L142) | Forget the previous game. |
+| `SplitterBot.play` | method | [146](../../arena/opponents.py#L146) | Moves chosen by the SplitterAgent. |
+| `_parse_value` | function | [151](../../arena/opponents.py#L151) | '3' -> 3, '0.5' -> 0.5, 'true' -> True, else the string (for 'Splitter:key=value'). |
+| `_registry` | function | [162](../../arena/opponents.py#L162) | name -> builder(time_limit) for every non-Splitter bot (teammates' bots are loaded lazily). |
+| `_models` | function | [255](../../arena/opponents.py#L255) | The two kept models, named for the arena (defined once, in splitter/agent.py). |
+| `styled_config` | function | [264](../../arena/opponents.py#L264) | Opponent style number n (deterministic): random risk taking, splitting, caution, search depth. |
+| `bot_names` | function | [293](../../arena/opponents.py#L293) | Every bot name make_bot() accepts. |
+| `SnapshotBot` | class | [298](../../arena/opponents.py#L298) | A frozen copy of splitter/ (arena/snapshots/splitter_<version>), see arena/snapshot.py. |
+| `SnapshotBot.__init__` | method | [301](../../arena/opponents.py#L301) | SplitterAgent imported from arena/snapshots/splitter_<version>/. |
+| `load_external` | function | [309](../../arena/opponents.py#L309) | 'py:<path>[:ClassName]' -> a Bot around an external Python agent class. Without ClassName the |
+| `make_bot` | function | [352](../../arena/opponents.py#L352) | spec: registry name, Splitter variant, 'Splitter:k=v,..', 'Snap:<version>[:k=v,..]' or 'py:<file>[:Class]'. |
 
 ### [arena/referee.py](../../arena/referee.py)
 
@@ -279,9 +279,9 @@ Chapters 01–08 explain *why*; this page answers *where*.
 
 | Name | Kind | Line | Purpose (first docstring line) |
 |---|---|---|---|
-| `_git` | function | [38](../../arena/fetch_opponents.py#L38) | Run a git command in the repo (never raises, never prompts; check returncode). |
-| `fetch` | function | [48](../../arena/fetch_opponents.py#L48) | Copy the teammates' bots from origin/<branch> into arena/vendor/<branch>/. |
-| `archive` | function | [94](../../arena/fetch_opponents.py#L94) | Write the frozen sparring bots of ARCHIVE into arena/vendor/<branch>-archive/ (if not there yet). |
+| `_git` | function | [39](../../arena/fetch_opponents.py#L39) | Run a git command in the repo (never raises, never prompts; check returncode). |
+| `fetch` | function | [49](../../arena/fetch_opponents.py#L49) | Copy the teammates' bots from origin/<branch> into arena/vendor/<branch>/. |
+| `archive` | function | [95](../../arena/fetch_opponents.py#L95) | Write the frozen sparring bots of ARCHIVE into arena/vendor/<branch>-archive/ (if not there yet). |
 
 ### [arena/history.py](../../arena/history.py)
 
@@ -307,17 +307,17 @@ Chapters 01–08 explain *why*; this page answers *where*.
 
 | Name | Kind | Line | Purpose (first docstring line) |
 |---|---|---|---|
-| `update_teammates` | function | [85](../../tools/teammate_matches.py#L85) | Bring arena/vendor/ up to date with the teammates' latest pushes (unless --no-update) and return |
-| `version_label` | function | [116](../../tools/teammate_matches.py#L116) | 'Othmane@214dbb0 (2026-10-15 14:27)' for a teammate's bot, 'in-repo' for our own bots. |
-| `check_loads` | function | [123](../../tools/teammate_matches.py#L123) | Build the bot once in a fresh process (like tools/play_bot.py does). -> (ok, error message). |
-| `load_map` | function | [139](../../tools/teammate_matches.py#L139) | An .xml map file (relative to the repo) or a map name of arena/maps.py. |
-| `schedule` | function | [146](../../tools/teammate_matches.py#L146) | Game g (0-based): every map as Vampires (we connect first), then every map as Werewolves. |
-| `play_game` | function | [151](../../tools/teammate_matches.py#L151) | One full game over the protocol: fake server + main.py + the teammate's bot. Returns one row. |
-| `summarize` | function | [206](../../tools/teammate_matches.py#L206) | Per-opponent table (markdown) of the finished games, the versions played, the unavailable bots. |
-| `store_history` | function | [246](../../tools/teammate_matches.py#L246) | One line per opponent in arena/results/history.csv (same file as the arena and server matches). |
-| `model_label` | function | [267](../../tools/teammate_matches.py#L267) | 'flagship', or 'flagship+strike_p=0.55' when --options are given. |
-| `_file_safe` | function | [272](../../tools/teammate_matches.py#L272) |  |
-| `main` | function | [276](../../tools/teammate_matches.py#L276) | Command line: update the teammates' bots, play every (opponent, game), record, summarize. |
+| `update_teammates` | function | [86](../../tools/teammate_matches.py#L86) | Bring arena/vendor/ up to date with the teammates' latest pushes (unless --no-update) and return |
+| `version_label` | function | [117](../../tools/teammate_matches.py#L117) | 'Othmane@214dbb0 (2026-10-15 14:27)' for a teammate's bot, 'in-repo' for our own bots. |
+| `check_loads` | function | [124](../../tools/teammate_matches.py#L124) | Build the bot once in a fresh process (like tools/play_bot.py does). -> (ok, error message). |
+| `load_map` | function | [140](../../tools/teammate_matches.py#L140) | An .xml map file (relative to the repo) or a map name of arena/maps.py. |
+| `schedule` | function | [147](../../tools/teammate_matches.py#L147) | Game g (0-based): every map as Vampires (we connect first), then every map as Werewolves. |
+| `play_game` | function | [152](../../tools/teammate_matches.py#L152) | One full game over the protocol: fake server + main.py + the teammate's bot. Returns one row. |
+| `summarize` | function | [207](../../tools/teammate_matches.py#L207) | Per-opponent table (markdown) of the finished games, the versions played, the unavailable bots. |
+| `store_history` | function | [247](../../tools/teammate_matches.py#L247) | One line per opponent in arena/results/history.csv (same file as the arena and server matches). |
+| `model_label` | function | [268](../../tools/teammate_matches.py#L268) | 'flagship', or 'flagship+strike_p=0.55' when --options are given. |
+| `_file_safe` | function | [273](../../tools/teammate_matches.py#L273) |  |
+| `main` | function | [277](../../tools/teammate_matches.py#L277) | Command line: update the teammates' bots, play every (opponent, game), record, summarize. |
 
 ### [tools/server_match.py](../../tools/server_match.py)
 

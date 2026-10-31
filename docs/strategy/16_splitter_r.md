@@ -262,7 +262,7 @@ projection, transit pruning and target partitioning") at 23:10 the same evening,
 his older sparring bots from his branch. So the final's Apex-live is his 22-October champion;
 the real-conditions matches below play V3. His removed bots (TacticalSplitter, Greedy, ...) are
 kept frozen at his commit 6535a1f in `arena/vendor/Othmane-archive/`
-([`fetch_opponents.ARCHIVE`](../../arena/fetch_opponents.py#L35)), so the tuning slots still work.
+([`fetch_opponents.ARCHIVE`](../../arena/fetch_opponents.py#L36)), so the tuning slots still work.
 
 ### Rule 5: real conditions (passed)
 

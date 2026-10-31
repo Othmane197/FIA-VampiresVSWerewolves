@@ -39,6 +39,19 @@ CPU core (no pondering, no multiprocessing in the bot), 2 s per move, Python 3.8
 | Version ladder (Elo) | 13.7.6 | Not done (`arena.history` covers the need) |
 | Opening preparation | 13.7.7 | Not done (unknown tournament maps) |
 
+## 13.0 Next steps after campaign 5
+
+The current ranked list is [18.6](18_campaign5.md). It has five items:
+1. hunted groups in the endgame, the weakness measured in the replays of the games lost to Harsha;
+2. a contact solver with chance nodes (Dana);
+3. deeper rollouts in transit (Apex);
+4. an endgame solver (Apex);
+5. pooled threats (Dana).
+
+Campaign 5 closed item 1 of 17.5: more thinking time (1.7 s) was −7.5 ± 5.7 on the screen and
+was not adopted. Item 3 of 17.5, the learned evaluation, is set aside: item 1 above targets the
+same blind spot of the evaluation, more cheaply.
+
 ## 13.0 Next steps after campaign 4
 
 The current ranked list is [17.5](17_campaign4.md): more thinking time made safe by the anytime
