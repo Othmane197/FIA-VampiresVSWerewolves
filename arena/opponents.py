@@ -24,7 +24,8 @@ Bots INSIDE the repo:
                           (run `python -m arena.fetch_opponents --fetch`); Othmane's older sparring
                           bots (TacticalSplitter, Greedy, ...) from the frozen arena/vendor/Othmane-archive/
     teammates' LIVE bots  Apex-live, RaceMCTS-live, Expecti-live: their tournament entry points with
-                          their own presets and time budgets (Othmane's "champion" Apex, Dana's SafeAgent)
+                          their own presets and time budgets (Othmane's "champion" Apex, Dana's SafeAgent);
+                          Harsha-1core: Harsha's root-parallel MCTS reduced to one in-process tree
 Bots OUTSIDE the repo:
     "py:<path/to/bot.py>[:ClassName]"   any Python class with compute_moves(GameState) or
                           compute_moves(BoardState, Species) (detected automatically)
@@ -204,6 +205,24 @@ def _registry() -> Dict[str, Callable[[float], Bot]]:
         (ai,) = load_vendor("Ronita", ["ai_agent"])        # MCTSAgent, 1.6 s
         return GameStateBot("RaceMCTS-live", lambda: ai.AIAgent("RaceMCTS-live"))
 
+    def harsha_1core(_t):
+        # Harsha's plan-based MCTS (root-parallel over all cores in his client). Its process pool
+        # cannot run here (the workers would import OUR ai_agent), so this runs ONE of its trees
+        # in-process, with its own settings (1.4 s, c 0.9, 8-ply rollouts): the one-core version
+        (ai,) = load_vendor("Harsha", ["ai_agent"])
+
+        def build():
+            agent = ai.AIAgent.__new__(ai.AIAgent)          # no process pool
+            agent.name, agent.num_cores, agent.last_decision, agent._pool = "Harsha-1core", 1, {}, None
+            seeds = iter(range(10 ** 9))
+
+            def search(snapshot):
+                r = ai.mcts_search(snapshot, ai.TIME_LIMIT, next(seeds))
+                return r.get("best_move"), r
+            agent._search = search
+            return agent
+        return GameStateBot("Harsha-1core", build)
+
     def expecti_live(_t):
         (sa,) = load_vendor("Dana", ["safe_agent"])        # SafeAgent around SearchAgent, depth 2, 1.2 s
         return GameStateBot("Expecti-live", lambda: sa.SafeAgent("Expecti-live"))
@@ -226,6 +245,7 @@ def _registry() -> Dict[str, Callable[[float], Bot]]:
         "Apex-live": apex_live,
         "RaceMCTS-live": race_live,
         "Expecti-live": expecti_live,
+        "Harsha-1core": harsha_1core,
     }
 
 

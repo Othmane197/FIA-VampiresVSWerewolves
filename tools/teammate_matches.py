@@ -67,13 +67,14 @@ from tools.fake_server import FakeServer
 TEAMMATE_BOTS = {
     # live tournament entry points (their own presets and time budgets): the default opponents
     "Apex-live": "Othmane", "RaceMCTS-live": "Ronita", "Expecti-live": "Dana",
+    "Harsha-1core": "Harsha",                                 # Harsha's MCTS, one tree (see arena/opponents.py)
     "Apex": "Othmane", "TacticalSplitter": "Othmane",        # Othmane's main bots
     "RaceMCTS": "Ronita",                                     # Ronita's MCTS
     "Expecti": "Dana",                                        # Dana's expectiminimax
     "Greedy": "Othmane", "PotentialField": "Othmane", "ShallowMinimax": "Othmane",
     "MonteCarlo": "Othmane", "Grabber": "Dana", "Rusher": "Dana", "Turtle": "Dana",
 }
-MAIN_BOTS = ["Apex-live", "RaceMCTS-live", "Expecti-live"]
+MAIN_BOTS = ["Apex-live", "RaceMCTS-live", "Expecti-live", "Harsha-1core"]
 VENDOR = os.path.join(ROOT, "arena", "vendor")
 HISTORY = os.path.join(ROOT, "arena", "results", "history.csv")
 FIELDS = ["opponent", "opponent_version", "game", "map", "we_connect_first", "our_species", "result",

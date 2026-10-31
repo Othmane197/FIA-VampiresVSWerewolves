@@ -21,13 +21,14 @@ from typing import Dict, Iterable, Optional
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VENDOR = os.path.join(ROOT, "arena", "vendor")
 
-BRANCHES = ("Othmane", "Ronita", "Dana")
+BRANCHES = ("Othmane", "Ronita", "Dana", "Harsha")
 SHARED = {"game_state.py", "game_engine.py", "network.py", "main.py", "connect.py"}
 # the files arena/opponents.py imports from each branch (a missing one is reported)
 REQUIRED = {
     "Othmane": ["apex_agent.py", "ai_agent.py"],
     "Ronita": ["mcts_agent.py", "ai_agent.py"],
     "Dana": ["search_agent.py", "sparring_agents.py", "safe_agent.py"],
+    "Harsha": ["ai_agent.py"],
 }
 # sparring bots a teammate later deleted from the branch, kept FROZEN at the last commit that had
 # them (arena/vendor/<branch>-archive/; no network needed: the commit is in the local history).

@@ -152,6 +152,28 @@ _SPECS = {
         ("f2_17x29", 307, 17, 29, 14, 13, 1, 6, 15, None),
         ("f2_11x13", 308, 11, 13, 11, 6, 2, 7, 9, 5),
     ],
+    # FRESH3 family (campaign 5): the validation of campaign 5 only (chapter 18)
+    "fresh3": [
+        ("f3_9x17", 401, 9, 17, 9, 6, 1, 5, None, None),
+        ("f3_13x23v", 402, 13, 23, 12, 13, 1, 4, None, None),
+        ("f3_13x19p", 403, 13, 19, 10, 3, 2, 6, 22, None),
+        ("f3_10x14c", 404, 10, 14, 10, 5, 1, 6, None, 4),
+        ("f3_15x27", 405, 15, 27, 12, 9, 1, 7, 13, None),
+        ("f3_11x19s", 406, 11, 19, 10, 3, 4, 9, None, None),
+        ("f3_18x30", 407, 18, 30, 14, 13, 1, 6, None, None),
+        ("f3_11x11", 408, 11, 11, 11, 6, 2, 7, 9, 5),
+    ],
+    # FRESH4 family (campaign 5): the final "strongest version" ladder only (chapter 18)
+    "fresh4": [
+        ("f4_10x18", 501, 10, 18, 10, 7, 1, 5, None, None),
+        ("f4_14x20v", 502, 14, 20, 12, 12, 1, 4, None, None),
+        ("f4_11x21p", 503, 11, 21, 10, 3, 2, 6, 20, None),
+        ("f4_9x13c", 504, 9, 13, 9, 5, 1, 6, 7, 4),
+        ("f4_13x25", 505, 13, 25, 12, 9, 1, 7, 12, None),
+        ("f4_12x16s", 506, 12, 16, 10, 3, 4, 9, None, None),
+        ("f4_16x28", 507, 16, 28, 14, 13, 1, 6, None, None),
+        ("f4_12x14", 508, 12, 14, 11, 6, 2, 7, 10, 5),
+    ],
 }
 
 _cache: Dict[str, List[Tuple[str, State]]] = {}
@@ -159,8 +181,9 @@ _cache: Dict[str, List[Tuple[str, State]]] = {}
 
 def build_suite(name: str = "all", max_ply: int = 200) -> List[Tuple[str, State]]:
     """name: 'all' (the 14 tuning maps), 'given', a family name ('holdout' = validation only,
-    'fresh' = campaign 3's final check only, 'fresh2' = campaign 4's validation only), or a
-    comma-separated list of map names/families."""
+    'fresh' = campaign 3's final check only, 'fresh2' = campaign 4's validation only, 'fresh3' /
+    'fresh4' = campaign 5's validation / final ladder only), or a comma-separated list of map
+    names/families."""
     key = f"{name}:{max_ply}"
     if key in _cache:
         return _cache[key]
@@ -172,7 +195,9 @@ def build_suite(name: str = "all", max_ply: int = 200) -> List[Tuple[str, State]
             every.append((nm, symmetric_map(seed, rows, cols, army, pairs, hmin, hmax, center, gap, max_ply)))
             families[fam].append(nm)
     if name == "all":                     # the TUNING maps: never the hold-out or fresh families
-        held = set(families["holdout"]) | set(families["fresh"]) | set(families["fresh2"])
+        held = set()
+        for fam in ("holdout", "fresh", "fresh2", "fresh3", "fresh4"):
+            held |= set(families[fam])
         out = [m for m in every if m[0] not in held]
     else:
         wanted = []
