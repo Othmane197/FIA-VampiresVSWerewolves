@@ -58,6 +58,11 @@ our groups we keep the worst threat:
 
 This is what punishes splits that are too thin, and stepping next to an equal enemy group.
 
+**Tried and removed: hunted groups** (campaign 6, chapter 19). Once no humans are left, a group
+lost at least λ × its size at any distance when a bigger enemy could kill it for sure and none
+of its own side's groups could kill that enemy. It cut the targeted losses, but cost 12.5 points
+against the live bots at λ = 1.0. It is deleted; the code is in the local snapshot `splitter_c6`.
+
 ## 4.4 From margin to probability: inside [`evaluate`](../../splitter/evaluate.py#L171)
 
 ```

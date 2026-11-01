@@ -175,7 +175,11 @@ the CPU load first, and start heavy runs with the priority set at creation, so t
 inherit it: `cmd /c start "" /belownormal /b /wait python -m arena.run ...`. Setting the priority
 after launch only lowers the alias process, not the interpreter and its workers (found in
 campaign 3). Do not run other heavy jobs during a 1.5 s run: below-normal workers stall when the
-CPU is busy, which shows up as slow moves (chapter 16.5).
+CPU is busy, which shows up as slow moves (chapter 16.5). **Pause Windows Update before an
+overnight run** (Settings → Windows Update → Pause updates). In campaign 6 an update installing
+at 2 a.m. stalled three simultaneous games, with moves of up to 4.3 s and timeouts on both
+sides (19.4). After a run, check that every slow game falls in one window and that the
+opponents were slowed too: if both hold, the machine was the cause.
 
 **Reading the numbers:**
 - Differences smaller than about 2 standard errors are noise. 24 games per opponent means about ±10%; 448 games means about ±2%.

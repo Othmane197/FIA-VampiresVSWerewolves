@@ -39,6 +39,13 @@ CPU core (no pondering, no multiprocessing in the bot), 2 s per move, Python 3.8
 | Version ladder (Elo) | 13.7.6 | Not done (`arena.history` covers the need) |
 | Opening preparation | 13.7.7 | Not done (unknown tournament maps) |
 
+## 13.0 After campaign 6 (the final iteration)
+
+Campaign 6 built and validated item 1 below, hunted groups in the endgame: not adopted
+(chapter 19). The project's improvement work ends here, with flagship Splitter-R3 and backup
+Splitter-Classic. Items 2 to 5 of the list below remain open for anyone who continues. Item 1
+could be retried as a version that applies only to our own groups (15.4).
+
 ## 13.0 Next steps after campaign 5
 
 The current ranked list is [18.6](18_campaign5.md). It has five items:
