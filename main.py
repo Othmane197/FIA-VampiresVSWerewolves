@@ -7,7 +7,8 @@ from game_state import GameState
 from safe_agent import SafeAgent
 
 # Changes compared with the original main.py (all on branch Dana):
-#  * the agent is our SafeAgent (expectiminimax search + a gate that only lets legal turns through),
+#  * the agent is our SafeAgent (DeepAgent alpha-beta search + a gate that only lets legal turns through),
+#    told on every MAP that a new game starts (DeepAgent counts plies and watches the 5-minute game clock),
 #  * --delay defaults to 0.0 (the old 0.5 s sleep ate a quarter of the 2 s budget), --time sets the
 #    search budget in seconds,
 #  * the game loop is the function run_game_loop(), so the end-to-end tests can reuse it,
@@ -21,7 +22,7 @@ def parse_args():
     port = 5555
     name = "CentraleBot"
     delay = 0.0   # seconds to wait before thinking (only useful to watch a game on the GUI)
-    budget = 1.2  # search budget per turn in seconds (the limit is 2 s, the rest is safety margin)
+    budget = 1.5  # search budget per turn in seconds (the limit is 2 s, the rest is safety margin)
 
     args = sys.argv[1:]
     if "--name" in args:
@@ -79,6 +80,8 @@ def run_game_loop(client, state, agent, name, delay=0.0, verbose=True):
 
             elif cmd == "MAP":
                 state.apply_updates(data["changes"])
+                if hasattr(agent, "new_game"):   # a new game starts: reset the engine's ply count and clock
+                    agent.new_game()
                 log(f"[Game] Initial MAP loaded ({len(data['changes'])} cells)")
                 log("\n=== Initial Board State ===")
                 log(state.render_board())

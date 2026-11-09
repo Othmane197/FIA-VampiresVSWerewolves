@@ -8,7 +8,9 @@ opponent wins ("the player cheated"), and an exception in main.py's loop stops u
 search agent is not trusted blindly. Every turn goes through a gate (server_rules.check_moves) and
 there are three tiers, tried in this order:
 
-  1. "search"     the turn chosen by SearchAgent (expectiminimax), if the gate accepts it
+  1. "search"     the turn chosen by the search engine, if the gate accepts it
+                  (DeepAgent = iterative-deepening alpha-beta by default; engine="expecti" gives the
+                  previous depth-2 expectiminimax SearchAgent)
   2. "candidate"  the first turn of the move generator's ranked list that the gate accepts
   3. "fallback"   the best single legal move found by brute force (any group, any neighbour)
 
@@ -22,6 +24,7 @@ from typing import Dict, List, Optional, Tuple
 from game_engine import BoardState
 from game_state import GameState, Species
 from move_generator import generate_turns
+from deep_agent import DeepAgent
 from search_agent import SearchAgent
 from server_rules import check_moves, is_certain_win, win_probability
 from state_converter import board_from_state
@@ -38,7 +41,7 @@ def any_legal_turn(board: BoardState, species: Species) -> Turn:
     is_vamp = species == Species.VAMPIRE
     for pos, count in sorted(board.get_species_groups(species), key=lambda g: (-g[1], g[0])):
         for n in board.get_neighbors(pos):
-            move = (pos[0], pos[1], count, n[0], n[1])
+            move = (pos[0], pos[1], min(count, 255), n[0], n[1])   # the protocol sends counts as one byte
             if check_moves(board, species, [move]) is not None:
                 continue
             h, v, w = board.get_cell(n)
@@ -58,15 +61,25 @@ def any_legal_turn(board: BoardState, species: Species) -> Turn:
 class SafeAgent:
     """Same interface as the repo's AIAgent: compute_moves(GameState) -> list of moves."""
 
-    def __init__(self, name: str = "ExpectiBot", inner=None, depth: int = 2, time_limit: float = 1.2,
-                 **search_kwargs):
+    def __init__(self, name: str = "DeepBot", inner=None, depth: int = 2, time_limit: float = 1.5,
+                 engine: str = "deep", **search_kwargs):
         self.name = name
-        self.inner = inner if inner is not None else SearchAgent(name, depth=depth, time_limit=time_limit,
-                                                                 **search_kwargs)
+        if inner is None:
+            if engine == "expecti":
+                inner = SearchAgent(name, depth=depth, time_limit=time_limit, **search_kwargs)
+            else:                                    # `depth` is not used: DeepAgent deepens until time runs out
+                inner = DeepAgent(name, time_limit=time_limit, **search_kwargs)
+        self.inner = inner
         self.last_source: Optional[str] = None
         self.last_problem: Optional[str] = None
         self.last_seconds: float = 0.0
         self.counts: Dict[str, int] = {"search": 0, "candidate": 0, "fallback": 0, "none": 0}
+
+    def new_game(self) -> None:
+        """Start of a new game (main.py calls it on MAP): the engine resets its ply count and clock."""
+        reset = getattr(self.inner, "new_game", None)
+        if reset is not None:
+            reset()
 
     def _note(self, problem: str) -> None:
         self.last_problem = problem if self.last_problem is None else self.last_problem + " | " + problem

@@ -68,15 +68,15 @@ for species in (V, W):
 print(f"OK  12 games over TCP (both species x Grabber/Rusher x 3 seeds): {total_turns} turns, every one "
       "accepted by the server rules, all answers < 2 s, all from the search tier")
 
-# 2) The real default budget (1.2 s) on a bigger map: stays below the 2 s limit including the socket.
+# 2) The real default budget (1.5 s) on a bigger map: stays below the 2 s limit including the socket.
 from maps import build_suite
 suite = build_suite()
 name, big = next((n, b) for n, b in suite if n.startswith("g15x29"))
-s, agent, _ = play(big, V, make_opponent("Grabber"), max_plies=12, time_limit=1.2, seed=2)
+s, agent, _ = play(big, V, make_opponent("Grabber"), max_plies=12, time_limit=1.5, seed=2)
 assert s.invalid == [] and s.silent_turns == 0 and s.replies >= 1
 worst = max(s.answer_times)
 assert worst < 2.0, worst
-print(f"OK  {name} with the 1.2 s budget: slowest answer {worst:.2f} s (limit 2 s) over {s.replies} turns")
+print(f"OK  {name} with the 1.5 s budget: slowest answer {worst:.2f} s (limit 2 s) over {s.replies} turns")
 
 # 2b) A long game (many turns) against the passive Turtle, so the loop is exercised over many UPDs.
 s, agent, _ = play(big, V, make_opponent("Turtle"), max_plies=80, time_limit=0.3, seed=5)
@@ -124,7 +124,7 @@ server.join()
 assert server.name_received == "CentraleBot" and server.invalid == [] and server.replies >= 1
 sys.argv = ["main.py", "127.0.0.1", "5555"]
 host, port, name, delay, budget = bot_main.parse_args()
-assert (host, port, delay, budget) == ("127.0.0.1", 5555, 0.0, 1.2)
-print("OK  main.main(): connects, sends the name, plays, exits cleanly; defaults are delay 0.0 s / budget 1.2 s")
+assert (host, port, delay, budget) == ("127.0.0.1", 5555, 0.0, 1.5)
+print("OK  main.main(): connects, sends the name, plays, exits cleanly; defaults are delay 0.0 s / budget 1.5 s")
 
 print("\nAll tests passed.")
