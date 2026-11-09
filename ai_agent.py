@@ -1,7 +1,6 @@
 # connects the MCTS agent (mcts_agent.py) to main.py
 # if something breaks we send a simple legal move so we never miss a turn
 
-import time
 from typing import List, Tuple
 from game_state import GameState
 from game_engine import BoardState
