@@ -99,6 +99,16 @@ out-harvested. Now each group's targets are sorted by distance and the k-th is m
 Measured on 5 large maps (25×40 to 50×50, 20 games vs the old bot at 0.3 s/move):
 37.5 % → 55 % (queue) → 67.5 % (queue + up to 6 groups).
 
+**Growth pass.** A group used to "see" only human groups it could convert *now*. A group of 12
+ignored 15 humans even when converting 4 humans next to it first would make it 16. Early on most
+human groups are bigger than our groups, so the bot under-planned its growth. Now, after the first
+pass, each group's *potential* size = its size + the humans already queued for it, and human groups
+nobody can convert yet are assigned with these potential sizes, queued *behind* the group's
+current targets (so the queue discount values them lower). Example: 12 vampires, 4 humans 2 cells
+away, 15 humans 7 cells away: evaluation 0.18 without, 0.41 with the growth pass.
+Measured vs Apex at full time on 6 large maps (12 games): 79.2 % → **87.5 %**, final material share
+60.4 % → **68.3 %** (`Params.growth`).
+
 ### 4.3 Risk: tanh squashing, the confidence bonus, the terminal score
 `value = tanh(raw / (0.25 × creatures + 0.5 × humans left)) + confidence`
 (confidence = +0.1 for the player we play for, −0.1 for the other).
@@ -131,7 +141,8 @@ All legal turns are astronomically many. Per group we propose a few goal-directe
 3. attack an adjacent enemy group it can kill for sure (alone or pooled with friends), or step
    toward a killable one;
 4. flee if an enemy group nearby could kill it or win a battle against it;
-5. step toward the nearest friendly group (merging is needed to reach the 1.5× threshold);
+5. merge: step toward the nearest friendly group *at least as big* (the smaller joins the bigger,
+   never both ways), ranked below collecting while humans are reachable;
 6. **adjacent random battles**: against humans if P ≥ 0.25; against monsters *always*, even a
    3 % lottery ticket. Other bots do try those against a big group of ours, and the side that
    is attacked must see it coming (observed: our 64 next to their 4, lost on a 3 % roll);
@@ -139,13 +150,25 @@ All legal turns are astronomically many. Per group we propose a few goal-directe
 
 Steps are chosen among the cells that bring the group one step closer, preferring the **least
 exposed** cell (0 = safe, 1 = an adjacent enemy could start a likely battle, 2 = adjacent enemies
-can kill us for sure), then the straightest one. (Observed bug before this: on `thetrap`, two
+can kill us for sure), then a cell not occupied by a friendly group, then the straightest one. (Observed bug before this: on `thetrap`, two
 cells were equally close to the humans, one adjacent to the enemy. The bot took the exposed one
 and turned a forced win into a coin flip.)
 
 Joint turns are enumerated best-first (sum of each group's option ranks), filtered by Rule 5
 (no cell both source and target) and by "at most one random battle per turn". At most 30 turns
 at the root and 16 inside the tree. Branching factor ≈ 3–16, which is what allows depth.
+Each option's source cells, target cells and number of random battles are precomputed once, so
+checking a combination is a set intersection. If every combination is rejected, a single group
+moving alone (always legal) is returned: the generator never returns an empty list.
+
+**Merge bug (found on 50×50 maps).** "Merge with the nearest friend" used to score 5, higher than
+stepping toward a small or distant human group. So it was the favourite of half the groups, and
+two neighbours each wanted to walk into the *other's* cell, which Rule 5 forbids. In a crowded
+position with 8 groups, 626 of the 640 combinations tried were illegal. The search crawled
+(271 nodes, depth 3), and once a node had no legal turn at all, every root turn scored −∞ and the
+bot sent an **empty turn**, a forfeit (`SafeAgent` would have replaced it, but the engine must
+never do this). After the fix: 16 combinations tried, 16 legal, 7 537 nodes in the same time.
+Large maps vs Apex: from losing both `big50_30` games to 79 % on 6 large maps.
 
 ## 6. Time and robustness
 
@@ -185,9 +208,15 @@ Calibration A/B (0.3 s vs the old engine, 44 games each): squash 0.6 / 0.25+0.5 
 64.8 % / 65.9 % / 59.1 %. Differences are within noise; 0.25 + 0.5 h was kept because it is the
 one that refuses the bad gamble of section 4.3.
 
-**Known weakness:** on the densest 50×50 map (30 human-group pairs, 576 humans) Apex out-collected
-us from both sides (231 vs 369). At depth 4–6 the long-range collection plan comes from the
-evaluation only; a better plan estimate (e.g. a greedy route per group) is the next thing to try.
+**Large maps (fixed on 10 Nov):** the version above lost the densest 50×50 map to Apex from both
+sides (231 vs 369). Diagnosis: Apex pulled ahead between plies 20 and 50 (116 vs 89 at ply 40),
+i.e. in the expansion phase. Fixes: the merge/Rule 5 bug and the growth pass (sections 4.2, 5).
+
+| vs Apex, full time, 6 large maps (25×40 to 50×50), 12 games | Score | Final material share |
+|---|---|---|
+| 9 Nov version, on `big50_30` only | 0/2 | ≈ 40 % |
+| + merge fix, faster generator, never-empty generator | 79.2 % | 60.4 % |
+| + growth pass (current default) | **87.5 %** | **68.3 %** |
 Noise warning: ± is one standard error; small symmetric maps are often decided by who moves first
 plus one coin-flip battle.
 

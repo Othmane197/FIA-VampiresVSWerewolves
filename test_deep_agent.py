@@ -108,8 +108,28 @@ def test_counts_fit_in_a_byte():
     print("  a group of 260: every proposed turn moves at most 255 creatures per cell")
 
 
+# the exact position where the bot once sent an EMPTY turn (a forfeit): 8 crowded werewolf groups
+# whose favourite moves all broke Rule 5, so a node had no legal turn and every root turn scored -inf
+CROWDED = ((((0, 37), 15), ((1, 38), 40), ((3, 34), 2), ((14, 10), 53), ((15, 42), 43), ((16, 25), 4)), (((24, 42), 30), ((24, 44), 13), ((24, 46), 27), ((39, 27), 8), ((40, 27), 26), ((41, 26), 4), ((42, 25), 8), ((44, 26), 12)), (((1, 41), 17), ((3, 8), 9), ((3, 39), 15), ((5, 49), 2), ((11, 49), 18), ((18, 12), 15), ((18, 21), 3), ((18, 27), 3), ((18, 48), 2), ((18, 49), 17), ((19, 46), 16), ((19, 49), 6), ((21, 3), 17), ((21, 39), 3), ((28, 10), 3), ((30, 0), 6), ((30, 3), 16), ((31, 0), 17), ((31, 1), 2), ((31, 22), 3), ((31, 28), 3), ((34, 7), 13), ((37, 12), 2), ((37, 18), 8), ((38, 0), 18), ((39, 15), 10), ((40, 25), 2), ((44, 0), 2), ((46, 10), 15), ((46, 14), 10), ((47, 14), 12), ((47, 16), 4), ((48, 8), 17), ((48, 22), 2), ((49, 18), 7)), 59)
+
+
+def test_never_an_empty_turn():
+    geo = Geometry(50, 50)
+    board = to_board(CROWDED, 50, 50)
+    for side, sp in ((0, Species.VAMPIRE), (1, Species.WEREWOLF)):
+        turns = gen_turns(CROWDED, side, geo, Params(), 16)
+        assert turns, "generator returned no turn"
+        for turn in turns:
+            assert check_moves(board, sp, list(turn)) is None, turn
+    agent = DeepAgent(time_limit=0.5)
+    moves = agent.compute_moves(state_from_board(board, Species.WEREWOLF))
+    assert moves and check_moves(board, Species.WEREWOLF, moves) is None, moves
+    print("  crowded 8-group position: legal non-empty turns, legal non-empty answer")
+
+
 if __name__ == "__main__":
     test_generator_legal_and_transition_exact()
     test_agent_answers_in_time()
     test_counts_fit_in_a_byte()
+    test_never_an_empty_turn()
     print("All tests passed.")

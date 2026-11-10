@@ -209,6 +209,8 @@ class Params:
         # evaluation
         self.gamma = 0.9            # discount per step of distance (a target 1 step closer is worth more)
         self.w_humans = 0.8         # weight of the (discounted) human race
+        self.growth = True          # growth-aware race: human groups nobody can convert yet go to the group
+                                    # that could after converting its current targets (queued behind them)
         self.queue = 0.6            # a group's k-th nearest won human group is worth queue^k: one group
                                     # cannot be in several places, so parallel collectors are worth more
         self.w_kill_adj = 0.8       # side to move can kill an adjacent enemy group for sure
@@ -263,8 +265,10 @@ def evaluate(S, side: int, P: Params, root: int = -1) -> float:
     race = 0.0
     # each human group is "won" by the side whose nearest strong-enough group arrives first (ties: the
     # side to move); the winning GROUP is remembered so that its targets can be queued (see Params.queue)
-    my_q: Dict[Pos, List[Tuple[int, int]]] = {}
-    th_q: Dict[Pos, List[Tuple[int, int]]] = {}
+    my_q: Dict[Pos, List[Tuple[int, int, int]]] = {}    # group -> [(later?, distance, humans)]
+    th_q: Dict[Pos, List[Tuple[int, int, int]]] = {}
+    growth = P.growth
+    later: List[Tuple[Pos, int]] = []
     for q, h in hum:
         dm, gm = 99, None
         for p, n in mine:
@@ -279,17 +283,42 @@ def evaluate(S, side: int, P: Params, root: int = -1) -> float:
                 if d < dt:
                     dt, gt = d, p
         if gm is None and gt is None:
+            if growth:
+                later.append((q, h))
             continue
         if dm <= dt:                                     # ties: the side to move arrives first
-            my_q.setdefault(gm, []).append((dm, h))
+            my_q.setdefault(gm, []).append((0, dm, h))
         else:
-            th_q.setdefault(gt, []).append((dt, h))
+            th_q.setdefault(gt, []).append((0, dt, h))
+    if later:
+        # growth pass: potential size = current size + the humans already queued for that group
+        pot_m = [(p, n + sum(x[2] for x in my_q.get(p, ()))) for p, n in mine]
+        pot_t = [(p, n + sum(x[2] for x in th_q.get(p, ()))) for p, n in theirs]
+        for q, h in later:
+            dm, gm = 99, None
+            for p, n in pot_m:
+                if n >= h:
+                    d = cheb(p, q)
+                    if d < dm:
+                        dm, gm = d, p
+            dt, gt = 99, None
+            for p, n in pot_t:
+                if n >= h:
+                    d = cheb(p, q)
+                    if d < dt:
+                        dt, gt = d, p
+            if gm is None and gt is None:
+                continue
+            if dm <= dt:                                 # (1, ...): sorted after the group's current targets
+                my_q.setdefault(gm, []).append((1, dm, h))
+            else:
+                th_q.setdefault(gt, []).append((1, dt, h))
     for sign, queues in ((1.0, my_q), (-1.0, th_q)):
         for targets in queues.values():
             if len(targets) > 1:
                 targets.sort()
             f = 1.0
-            for d, h in targets:
+            for _, d, h in targets:
                 race += sign * f * h * g ** (d - 1)
                 f *= queue
 
@@ -409,13 +438,17 @@ def gen_turns(S, side: int, geo: Geometry, P: Params, limit: int) -> List[Turn]:
 
     def steps(p: Pos, target: Pos, amount: int) -> List[Pos]:
         """Neighbours of p that bring `amount` creatures one step closer to target, best first:
-        least exposed (see danger), then straightest, then through convertible humans."""
+        least exposed (see danger), then not on a friendly group, then straightest, then through
+        convertible humans."""
         d0 = cheb(p, target)
         ranked = []
         for n in nbr[p]:
             if cheb(n, target) != d0 - 1 or not passable(n, amount, target):
                 continue
             ranked.append(((danger(n, amount) if n != target else 0,
+                            # avoid a friend's cell: that friend usually moves too, and a cell cannot
+                            # be both source and target (Rule 5), so the two moves could not combine
+                            1 if (n in mine and n != target) else 0,
                             abs(n[0] - target[0]) + abs(n[1] - target[1]),
                             0 if n in hum else 1, n), n))
         ranked.sort()
@@ -489,12 +522,16 @@ def gen_turns(S, side: int, geo: Geometry, P: Params, limit: int) -> List[Turn]:
             if best is not None:
                 add([(p[0], p[1], c, best[0], best[1])], 800)
 
-        # 4. merge with the nearest friendly group (needed to reach 1.5x thresholds)
+        # 4. merge: join the nearest friendly group that is at least as big (needed to reach 1.5x
+        #    thresholds). One direction only (the smaller joins the bigger): two groups walking into
+        #    each other's cell would break Rule 5. Ranked below collecting while humans are reachable.
         if n_groups > 1:
-            f = min((k for k, _ in mine_t if k != p), key=lambda k: (cheb(p, k), k))
-            n = step(p, f, c)
-            if n is not None:
-                add([(p[0], p[1], c, n[0], n[1])], 5 if conv else 50)
+            bigger = [k for k, n in mine_t if k != p and (n, k) > (c, p)]
+            if bigger:
+                f = min(bigger, key=lambda k: (cheb(p, k), k))
+                n = step(p, f, c)
+                if n is not None:
+                    add([(p[0], p[1], c, n[0], n[1])], 0.45 if conv else 50)
 
         # 5. adjacent random battles with P >= gamble_floor, for BOTH players: our own are then judged
         #    by the evaluation (refused unless we are behind), and the opponent's must be anticipated
@@ -582,6 +619,22 @@ def gen_turns(S, side: int, geo: Geometry, P: Params, limit: int) -> List[Turn]:
         return False
 
     oversized: List[Turn] = []
+    # the 255 checks are only needed if some cell could exceed 255 at all
+    byte_risk = sum(mine.values()) + max(hum.values(), default=0) > MAX_COUNT
+
+    # each option, precomputed once: (moves, source cells, target cells, number of random battles)
+    prepared = []
+    for opts in per_group:
+        prep = []
+        for moves, _ in opts:
+            g_count = 0
+            for m in moves:
+                d = (m[3], m[4])
+                if (d in hum and hum[d] > m[2]) or (d in theirs and 2 * m[2] < 3 * theirs[d]):
+                    g_count += 1
+            prep.append((moves, frozenset((m[0], m[1]) for m in moves),
+                         frozenset((m[3], m[4]) for m in moves), g_count))
+        prepared.append(prep)
 
     # joint turns, best-first by the sum of option ranks (0 = each group's favourite)
     turns: List[Turn] = []
@@ -589,33 +642,51 @@ def gen_turns(S, side: int, geo: Geometry, P: Params, limit: int) -> List[Turn]:
     heap = [(0, start)]
     seen = {start}
     pops = 0
-    while heap and len(turns) < limit and pops < 20 * limit:
+    while heap and len(turns) < limit and pops < 40 * limit:
         cost, idx = heapq.heappop(heap)
         pops += 1
         moves = []
-        for opts, i in zip(per_group, idx):
-            moves.extend(opts[i][0])
-        if moves and not fits_in_a_byte(moves):
-            moves = cap_moves(moves)
-            if too_big(moves):
-                oversized.append(tuple(moves))      # kept only if nothing else is possible
-                moves = []
-        if moves:
-            srcs = {(m[0], m[1]) for m in moves}
-            if all((m[3], m[4]) not in srcs for m in moves):          # Rule 5
-                gambles = 0
-                for m in moves:
-                    d = (m[3], m[4])
-                    if (d in hum and hum[d] > m[2]) or (d in theirs and 2 * m[2] < 3 * theirs[d]):
-                        gambles += 1
-                if gambles <= 1:
-                    turns.append(tuple(moves))
+        srcs = set()
+        dsts = set()
+        gambles = 0
+        for prep, i in zip(prepared, idx):
+            mv, s_, d_, g_ = prep[i]
+            if mv:
+                moves.extend(mv)
+                srcs |= s_
+                dsts |= d_
+                gambles += g_
+        # Rule 5 (no cell both source and target) and at most one random battle per turn
+        if moves and gambles <= 1 and not (srcs & dsts):
+            if byte_risk and not fits_in_a_byte(moves):
+                moves = cap_moves(moves)
+                if too_big(moves):
+                    oversized.append(tuple(moves))  # kept only if nothing else is possible
+                    moves = []
+            if moves:
+                turns.append(tuple(moves))
         for j in range(len(idx)):
             if idx[j] + 1 < len(per_group[j]):
                 nxt = idx[:j] + (idx[j] + 1,) + idx[j + 1:]
                 if nxt not in seen:
                     seen.add(nxt)
                     heapq.heappush(heap, (cost + 1, nxt))
+    if not turns:
+        # every combination was rejected (crowded groups: Rule 5 conflicts, several gambles, >255):
+        # a single group moving alone is always legal, so take the best such move
+        for opts in per_group:
+            for moves, _ in opts:
+                if moves:
+                    moves = cap_moves(list(moves))
+                    if moves and not too_big(moves):
+                        gambles = sum(1 for m in moves
+                                      if ((m[3], m[4]) in hum and hum[(m[3], m[4])] > m[2]) or
+                                      ((m[3], m[4]) in theirs and 2 * m[2] < 3 * theirs[(m[3], m[4])]))
+                        if gambles <= 1 and all((m[3], m[4]) not in {(k[0], k[1]) for k in moves} for m in moves):
+                            turns.append(tuple(moves))
+                            break
+            if len(turns) >= 3:
+                break
     if not turns and oversized:
         turns = oversized[:1]
     return turns
@@ -746,7 +817,7 @@ class Searcher:
             it_start = now
             order = sorted(root, key=lambda t: -scores[t])
             alpha = -INF
-            it_best, it_val = None, -INF
+            it_best, it_val = order[0], -INF            # never None, even if every turn scores -inf
             try:
                 for i, turn in enumerate(order):
                     v = self.turn_value(S, side, turn, depth, alpha, INF)
