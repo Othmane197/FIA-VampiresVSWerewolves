@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="528" viewBox="0 0 760 528" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+<title id="t">Does splitting pay? Splitter v5 against its no-split ablation</title><desc id="d">Win rate by opponent, 448 games per bot, 0.2 s per move, same seeds</desc>
+<rect width="760" height="528" fill="#fcfcfb"/>
+<text x="16.0" y="28.0" font-size="16" fill="#0b0b0b" text-anchor="start" font-weight="600">Does splitting pay? Splitter v5 against its no-split ablation</text>
+<text x="16.0" y="48.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">Win rate by opponent, 448 games per bot, 0.2 s per move, same seeds</text>
+<rect x="16" y="65" width="12" height="12" rx="3" fill="#2a78d6"/>
+<text x="34.0" y="75.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">Splitter (smart splitting)</text>
+<rect x="228" y="65" width="12" height="12" rx="3" fill="#a3a29c"/>
+<text x="246.0" y="75.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">No-split ablation (deathball)</text>
+<line x1="186.0" y1="86" x2="186.0" y2="494" stroke="#e4e3df" stroke-width="1"/>
+<text x="186.0" y="510.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">0%</text>
+<line x1="286.8" y1="86" x2="286.8" y2="494" stroke="#e4e3df" stroke-width="1"/>
+<text x="286.8" y="510.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">20%</text>
+<line x1="387.6" y1="86" x2="387.6" y2="494" stroke="#e4e3df" stroke-width="1"/>
+<text x="387.6" y="510.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">40%</text>
+<line x1="488.4" y1="86" x2="488.4" y2="494" stroke="#e4e3df" stroke-width="1"/>
+<text x="488.4" y="510.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">60%</text>
+<line x1="589.2" y1="86" x2="589.2" y2="494" stroke="#e4e3df" stroke-width="1"/>
+<text x="589.2" y="510.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">80%</text>
+<line x1="690.0" y1="86" x2="690.0" y2="494" stroke="#e4e3df" stroke-width="1"/>
+<text x="690.0" y="510.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">100%</text>
+<text x="176.0" y="111.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">Apex</text>
+<path d="M186.0,92.0 H578.1 Q582.1,92.0 582.1,96.0 V102.0 Q582.1,106.0 578.1,106.0 H186.0 Z" fill="#2a78d6"><title>Apex, Splitter (smart splitting): 78.6%</title></path>
+<text x="587.1" y="103.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">78.6%</text>
+<path d="M186.0,108.0 H595.8 Q599.8,108.0 599.8,112.0 V118.0 Q599.8,122.0 595.8,122.0 H186.0 Z" fill="#a3a29c"><title>Apex, No-split ablation (deathball): 82.1%</title></path>
+<text x="604.8" y="119.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">82.1%</text>
+<text x="176.0" y="155.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">RaceMCTS</text>
+<path d="M186.0,136.0 H515.1 Q519.1,136.0 519.1,140.0 V146.0 Q519.1,150.0 515.1,150.0 H186.0 Z" fill="#2a78d6"><title>RaceMCTS, Splitter (smart splitting): 66.1%</title></path>
+<text x="524.1" y="147.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">66.1%</text>
+<path d="M186.0,152.0 H452.1 Q456.1,152.0 456.1,156.0 V162.0 Q456.1,166.0 452.1,166.0 H186.0 Z" fill="#a3a29c"><title>RaceMCTS, No-split ablation (deathball): 53.6%</title></path>
+<text x="461.1" y="163.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">53.6%</text>
+<text x="176.0" y="199.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">Expecti</text>
+<path d="M186.0,180.0 H528.8 Q532.8,180.0 532.8,184.0 V190.0 Q532.8,194.0 528.8,194.0 H186.0 Z" fill="#2a78d6"><title>Expecti, Splitter (smart splitting): 68.8%</title></path>
+<text x="537.8" y="191.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">68.8%</text>
+<path d="M186.0,196.0 H465.2 Q469.2,196.0 469.2,200.0 V206.0 Q469.2,210.0 465.2,210.0 H186.0 Z" fill="#a3a29c"><title>Expecti, No-split ablation (deathball): 56.2%</title></path>
+<text x="474.2" y="207.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">56.2%</text>
+<text x="176.0" y="243.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">TacticalSplitter</text>
+<path d="M186.0,224.0 H641.1 Q645.1,224.0 645.1,228.0 V234.0 Q645.1,238.0 641.1,238.0 H186.0 Z" fill="#2a78d6"><title>TacticalSplitter, Splitter (smart splitting): 91.1%</title></path>
+<text x="650.1" y="235.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">91.1%</text>
+<path d="M186.0,240.0 H573.6 Q577.6,240.0 577.6,244.0 V250.0 Q577.6,254.0 573.6,254.0 H186.0 Z" fill="#a3a29c"><title>TacticalSplitter, No-split ablation (deathball): 77.7%</title></path>
+<text x="582.6" y="251.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">77.7%</text>
+<text x="176.0" y="287.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">Grabber</text>
+<path d="M186.0,268.0 H570.1 Q574.1,268.0 574.1,272.0 V278.0 Q574.1,282.0 570.1,282.0 H186.0 Z" fill="#2a78d6"><title>Grabber, Splitter (smart splitting): 77%</title></path>
+<text x="579.1" y="279.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">77%</text>
+<path d="M186.0,284.0 H549.9 Q553.9,284.0 553.9,288.0 V294.0 Q553.9,298.0 549.9,298.0 H186.0 Z" fill="#a3a29c"><title>Grabber, No-split ablation (deathball): 73%</title></path>
+<text x="558.9" y="295.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">73%</text>
+<text x="176.0" y="331.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">Greedy</text>
+<path d="M186.0,312.0 H555.0 Q559.0,312.0 559.0,316.0 V322.0 Q559.0,326.0 555.0,326.0 H186.0 Z" fill="#2a78d6"><title>Greedy, Splitter (smart splitting): 74%</title></path>
+<text x="564.0" y="323.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">74%</text>
+<path d="M186.0,328.0 H560.0 Q564.0,328.0 564.0,332.0 V338.0 Q564.0,342.0 560.0,342.0 H186.0 Z" fill="#a3a29c"><title>Greedy, No-split ablation (deathball): 75%</title></path>
+<text x="569.0" y="339.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">75%</text>
+<text x="176.0" y="375.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">Starter</text>
+<path d="M186.0,356.0 H585.2 Q589.2,356.0 589.2,360.0 V366.0 Q589.2,370.0 585.2,370.0 H186.0 Z" fill="#2a78d6"><title>Starter, Splitter (smart splitting): 80%</title></path>
+<text x="594.2" y="367.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">80%</text>
+<path d="M186.0,372.0 H580.2 Q584.2,372.0 584.2,376.0 V382.0 Q584.2,386.0 580.2,386.0 H186.0 Z" fill="#a3a29c"><title>Starter, No-split ablation (deathball): 79%</title></path>
+<text x="589.2" y="383.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">79%</text>
+<text x="176.0" y="419.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">Rusher</text>
+<path d="M186.0,400.0 H675.9 Q679.9,400.0 679.9,404.0 V410.0 Q679.9,414.0 675.9,414.0 H186.0 Z" fill="#2a78d6"><title>Rusher, Splitter (smart splitting): 98%</title></path>
+<text x="684.9" y="411.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">98%</text>
+<path d="M186.0,416.0 H675.9 Q679.9,416.0 679.9,420.0 V426.0 Q679.9,430.0 675.9,430.0 H186.0 Z" fill="#a3a29c"><title>Rusher, No-split ablation (deathball): 98%</title></path>
+<text x="684.9" y="427.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">98%</text>
+<text x="176.0" y="463.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">Overall</text>
+<path d="M186.0,444.0 H580.7 Q584.7,444.0 584.7,448.0 V454.0 Q584.7,458.0 580.7,458.0 H186.0 Z" fill="#2a78d6"><title>Overall, Splitter (smart splitting): 79.1%</title></path>
+<text x="589.7" y="455.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">79.1%</text>
+<path d="M186.0,460.0 H556.5 Q560.5,460.0 560.5,464.0 V470.0 Q560.5,474.0 556.5,474.0 H186.0 Z" fill="#a3a29c"><title>Overall, No-split ablation (deathball): 74.3%</title></path>
+<text x="565.5" y="471.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">74.3%</text>
+<line x1="186" y1="86" x2="186" y2="478" stroke="#52514e" stroke-width="1"/>
+</svg>

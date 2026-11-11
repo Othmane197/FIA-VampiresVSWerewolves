@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="352" viewBox="0 0 760 352" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+<title id="t">Campaign 6, the final iteration: hunted groups did not pay</title><desc id="d">Score against the live bots and against the styled opponents (fresh3, 160 games per bot)</desc>
+<rect width="760" height="352" fill="#fcfcfb"/>
+<text x="16.0" y="28.0" font-size="16" fill="#0b0b0b" text-anchor="start" font-weight="600">Campaign 6, the final iteration: hunted groups did not pay</text>
+<text x="16.0" y="48.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">Score against the live bots and against the styled opponents (fresh3, 160 games per bot)</text>
+<rect x="16" y="65" width="12" height="12" rx="3" fill="#2a78d6"/>
+<text x="34.0" y="75.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">Live teammate bots (64 games)</text>
+<rect x="249" y="65" width="12" height="12" rx="3" fill="#1baf7a"/>
+<text x="267.0" y="75.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">Randomized styles (96 games)</text>
+<line x1="166.0" y1="86" x2="166.0" y2="318" stroke="#e4e3df" stroke-width="1"/>
+<text x="166.0" y="334.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">0%</text>
+<line x1="270.8" y1="86" x2="270.8" y2="318" stroke="#e4e3df" stroke-width="1"/>
+<text x="270.8" y="334.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">20%</text>
+<line x1="375.6" y1="86" x2="375.6" y2="318" stroke="#e4e3df" stroke-width="1"/>
+<text x="375.6" y="334.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">40%</text>
+<line x1="480.4" y1="86" x2="480.4" y2="318" stroke="#e4e3df" stroke-width="1"/>
+<text x="480.4" y="334.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">60%</text>
+<line x1="585.2" y1="86" x2="585.2" y2="318" stroke="#e4e3df" stroke-width="1"/>
+<text x="585.2" y="334.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">80%</text>
+<line x1="690.0" y1="86" x2="690.0" y2="318" stroke="#e4e3df" stroke-width="1"/>
+<text x="690.0" y="334.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">100%</text>
+<text x="156.0" y="111.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">R3 flagship</text>
+<path d="M166.0,92.0 H518.3 Q522.3,92.0 522.3,96.0 V102.0 Q522.3,106.0 518.3,106.0 H166.0 Z" fill="#2a78d6"><title>R3 flagship, Live teammate bots (64 games): 68%</title></path>
+<text x="527.3" y="103.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">68%</text>
+<path d="M166.0,108.0 H566.0 Q570.0,108.0 570.0,112.0 V118.0 Q570.0,122.0 566.0,122.0 H166.0 Z" fill="#1baf7a"><title>R3 flagship, Randomized styles (96 games): 77.1%</title></path>
+<text x="575.0" y="119.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">77.1%</text>
+<text x="156.0" y="155.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">R3 + hunted 0.5</text>
+<path d="M166.0,136.0 H505.7 Q509.7,136.0 509.7,140.0 V146.0 Q509.7,150.0 505.7,150.0 H166.0 Z" fill="#2a78d6"><title>R3 + hunted 0.5, Live teammate bots (64 games): 65.6%</title></path>
+<text x="514.7" y="147.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">65.6%</text>
+<path d="M166.0,152.0 H568.6 Q572.6,152.0 572.6,156.0 V162.0 Q572.6,166.0 568.6,166.0 H166.0 Z" fill="#1baf7a"><title>R3 + hunted 0.5, Randomized styles (96 games): 77.6%</title></path>
+<text x="577.6" y="163.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">77.6%</text>
+<text x="156.0" y="199.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">R3 + hunted 1.0</text>
+<path d="M166.0,180.0 H452.8 Q456.8,180.0 456.8,184.0 V190.0 Q456.8,194.0 452.8,194.0 H166.0 Z" fill="#2a78d6"><title>R3 + hunted 1.0, Live teammate bots (64 games): 55.5%</title></path>
+<text x="461.8" y="191.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">55.5%</text>
+<path d="M166.0,196.0 H573.9 Q577.9,196.0 577.9,200.0 V206.0 Q577.9,210.0 573.9,210.0 H166.0 Z" fill="#1baf7a"><title>R3 + hunted 1.0, Randomized styles (96 games): 78.6%</title></path>
+<text x="582.9" y="207.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">78.6%</text>
+<text x="156.0" y="243.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">Classic backup</text>
+<path d="M166.0,224.0 H534.6 Q538.6,224.0 538.6,228.0 V234.0 Q538.6,238.0 534.6,238.0 H166.0 Z" fill="#2a78d6"><title>Classic backup, Live teammate bots (64 games): 71.1%</title></path>
+<text x="543.6" y="235.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">71.1%</text>
+<path d="M166.0,240.0 H459.6 Q463.6,240.0 463.6,244.0 V250.0 Q463.6,254.0 459.6,254.0 H166.0 Z" fill="#1baf7a"><title>Classic backup, Randomized styles (96 games): 56.8%</title></path>
+<text x="468.6" y="251.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">56.8%</text>
+<text x="156.0" y="287.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">Classic + hunted 1.0</text>
+<path d="M166.0,268.0 H550.8 Q554.8,268.0 554.8,272.0 V278.0 Q554.8,282.0 550.8,282.0 H166.0 Z" fill="#2a78d6"><title>Classic + hunted 1.0, Live teammate bots (64 games): 74.2%</title></path>
+<text x="559.8" y="279.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">74.2%</text>
+<path d="M166.0,284.0 H448.6 Q452.6,284.0 452.6,288.0 V294.0 Q452.6,298.0 448.6,298.0 H166.0 Z" fill="#1baf7a"><title>Classic + hunted 1.0, Randomized styles (96 games): 54.7%</title></path>
+<text x="457.6" y="295.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">54.7%</text>
+<line x1="166" y1="86" x2="166" y2="302" stroke="#52514e" stroke-width="1"/>
+</svg>

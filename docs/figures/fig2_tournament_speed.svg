@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="390" viewBox="0 0 760 390" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+<title id="t">At tournament speed, splitting matters even more</title><desc id="d">Win rate at 1.5 s per move, 54 paired games per configuration (campaign 1)</desc>
+<rect width="760" height="390" fill="#fcfcfb"/>
+<text x="16.0" y="28.0" font-size="16" fill="#0b0b0b" text-anchor="start" font-weight="600">At tournament speed, splitting matters even more</text>
+<text x="16.0" y="48.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">Win rate at 1.5 s per move, 54 paired games per configuration (campaign 1)</text>
+<rect x="16" y="65" width="12" height="12" rx="3" fill="#2a78d6"/>
+<text x="34.0" y="75.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">Flagship (v7)</text>
+<rect x="137" y="65" width="12" height="12" rx="3" fill="#eb6834"/>
+<text x="155.0" y="75.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">Splitter-HMM (opponent model)</text>
+<rect x="370" y="65" width="12" height="12" rx="3" fill="#a3a29c"/>
+<text x="388.0" y="75.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">No-split ablation</text>
+<line x1="186.0" y1="86" x2="186.0" y2="338" stroke="#e4e3df" stroke-width="1"/>
+<text x="186.0" y="354.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">0%</text>
+<line x1="286.8" y1="86" x2="286.8" y2="338" stroke="#e4e3df" stroke-width="1"/>
+<text x="286.8" y="354.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">20%</text>
+<line x1="387.6" y1="86" x2="387.6" y2="338" stroke="#e4e3df" stroke-width="1"/>
+<text x="387.6" y="354.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">40%</text>
+<line x1="488.4" y1="86" x2="488.4" y2="338" stroke="#e4e3df" stroke-width="1"/>
+<text x="488.4" y="354.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">60%</text>
+<line x1="589.2" y1="86" x2="589.2" y2="338" stroke="#e4e3df" stroke-width="1"/>
+<text x="589.2" y="354.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">80%</text>
+<line x1="690.0" y1="86" x2="690.0" y2="338" stroke="#e4e3df" stroke-width="1"/>
+<text x="690.0" y="354.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">100%</text>
+<text x="176.0" y="119.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">Apex</text>
+<path d="M186.0,92.0 H615.9 Q619.9,92.0 619.9,96.0 V102.0 Q619.9,106.0 615.9,106.0 H186.0 Z" fill="#2a78d6"><title>Apex, Flagship (v7): 86.1%</title></path>
+<text x="624.9" y="103.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">86.1%</text>
+<path d="M186.0,108.0 H545.9 Q549.9,108.0 549.9,112.0 V118.0 Q549.9,122.0 545.9,122.0 H186.0 Z" fill="#eb6834"><title>Apex, Splitter-HMM (opponent model): 72.2%</title></path>
+<text x="554.9" y="119.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">72.2%</text>
+<path d="M186.0,124.0 H588.2 Q592.2,124.0 592.2,128.0 V134.0 Q592.2,138.0 588.2,138.0 H186.0 Z" fill="#a3a29c"><title>Apex, No-split ablation: 80.6%</title></path>
+<text x="597.2" y="135.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">80.6%</text>
+<text x="176.0" y="179.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">Expecti</text>
+<path d="M186.0,152.0 H601.8 Q605.8,152.0 605.8,156.0 V162.0 Q605.8,166.0 601.8,166.0 H186.0 Z" fill="#2a78d6"><title>Expecti, Flagship (v7): 83.3%</title></path>
+<text x="610.8" y="163.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">83.3%</text>
+<path d="M186.0,168.0 H588.2 Q592.2,168.0 592.2,172.0 V178.0 Q592.2,182.0 588.2,182.0 H186.0 Z" fill="#eb6834"><title>Expecti, Splitter-HMM (opponent model): 80.6%</title></path>
+<text x="597.2" y="179.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">80.6%</text>
+<path d="M186.0,184.0 H462.2 Q466.2,184.0 466.2,188.0 V194.0 Q466.2,198.0 462.2,198.0 H186.0 Z" fill="#a3a29c"><title>Expecti, No-split ablation: 55.6%</title></path>
+<text x="471.2" y="195.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">55.6%</text>
+<text x="176.0" y="239.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">RaceMCTS</text>
+<path d="M186.0,212.0 H518.2 Q522.2,212.0 522.2,216.0 V222.0 Q522.2,226.0 518.2,226.0 H186.0 Z" fill="#2a78d6"><title>RaceMCTS, Flagship (v7): 66.7%</title></path>
+<text x="527.2" y="223.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">66.7%</text>
+<path d="M186.0,228.0 H378.1 Q382.1,228.0 382.1,232.0 V238.0 Q382.1,242.0 378.1,242.0 H186.0 Z" fill="#eb6834"><title>RaceMCTS, Splitter-HMM (opponent model): 38.9%</title></path>
+<text x="387.1" y="239.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">38.9%</text>
+<path d="M186.0,244.0 H405.8 Q409.8,244.0 409.8,248.0 V254.0 Q409.8,258.0 405.8,258.0 H186.0 Z" fill="#a3a29c"><title>RaceMCTS, No-split ablation: 44.4%</title></path>
+<text x="414.8" y="255.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">44.4%</text>
+<text x="176.0" y="299.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">Overall</text>
+<path d="M186.0,272.0 H578.6 Q582.6,272.0 582.6,276.0 V282.0 Q582.6,286.0 578.6,286.0 H186.0 Z" fill="#2a78d6"><title>Overall, Flagship (v7): 78.7%</title></path>
+<text x="587.6" y="283.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">78.7%</text>
+<path d="M186.0,288.0 H504.1 Q508.1,288.0 508.1,292.0 V298.0 Q508.1,302.0 504.1,302.0 H186.0 Z" fill="#eb6834"><title>Overall, Splitter-HMM (opponent model): 63.9%</title></path>
+<text x="513.1" y="299.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">63.9%</text>
+<path d="M186.0,304.0 H485.4 Q489.4,304.0 489.4,308.0 V314.0 Q489.4,318.0 485.4,318.0 H186.0 Z" fill="#a3a29c"><title>Overall, No-split ablation: 60.2%</title></path>
+<text x="494.4" y="315.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">60.2%</text>
+<line x1="186" y1="86" x2="186" y2="322" stroke="#52514e" stroke-width="1"/>
+<text x="16.0" y="380.0" font-size="11" fill="#8a8984" text-anchor="start" font-weight="normal">Overall paired differences with the flagship: HMM −14.8 ± 4.9, no-split −18.5 ± 7.0.</text>
+</svg>

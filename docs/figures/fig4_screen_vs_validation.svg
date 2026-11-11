@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="468" viewBox="0 0 760 468" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+<title id="t">Why every result was validated twice</title><desc id="d">Each idea&#x27;s screen result against its result on unseen maps, opponents or dice (points)</desc>
+<rect width="760" height="468" fill="#fcfcfb"/>
+<text x="16.0" y="28.0" font-size="16" fill="#0b0b0b" text-anchor="start" font-weight="600">Why every result was validated twice</text>
+<text x="16.0" y="48.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">Each idea&#x27;s screen result against its result on unseen maps, opponents or dice (points)</text>
+<rect x="16" y="65" width="12" height="12" rx="3" fill="#eb6834"/>
+<text x="34.0" y="75.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">Screen (tuning data)</text>
+<rect x="186" y="65" width="12" height="12" rx="3" fill="#2a78d6"/>
+<text x="204.0" y="75.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">Validation (unseen data)</text>
+<line x1="266.0" y1="86" x2="266.0" y2="388" stroke="#e4e3df" stroke-width="1"/>
+<text x="266.0" y="404.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">-20</text>
+<line x1="313.8" y1="86" x2="313.8" y2="388" stroke="#e4e3df" stroke-width="1"/>
+<text x="313.8" y="404.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">-15</text>
+<line x1="361.5" y1="86" x2="361.5" y2="388" stroke="#e4e3df" stroke-width="1"/>
+<text x="361.5" y="404.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">-10</text>
+<line x1="409.2" y1="86" x2="409.2" y2="388" stroke="#e4e3df" stroke-width="1"/>
+<text x="409.2" y="404.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">-5</text>
+<line x1="457.0" y1="86" x2="457.0" y2="388" stroke="#52514e" stroke-width="1.5"/>
+<text x="457.0" y="404.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">0</text>
+<line x1="504.8" y1="86" x2="504.8" y2="388" stroke="#e4e3df" stroke-width="1"/>
+<text x="504.8" y="404.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">+5</text>
+<line x1="552.5" y1="86" x2="552.5" y2="388" stroke="#e4e3df" stroke-width="1"/>
+<text x="552.5" y="404.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">+10</text>
+<line x1="600.2" y1="86" x2="600.2" y2="388" stroke="#e4e3df" stroke-width="1"/>
+<text x="600.2" y="404.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">+15</text>
+<line x1="648.0" y1="86" x2="648.0" y2="388" stroke="#e4e3df" stroke-width="1"/>
+<text x="648.0" y="404.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">+20</text>
+<text x="457.0" y="422.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">Paired difference with the reference model (points of win rate)</text>
+<text x="256.0" y="108.0" font-size="12" fill="#52514e" text-anchor="end" font-weight="normal">Endgame kiting + depth 0 (c1)</text>
+<line x1="564.9" y1="104" x2="451.3" y2="104" stroke="#a3a29c" stroke-width="2"/>
+<line x1="432.2" y1="104" x2="470.4" y2="104" stroke="#2a78d6" stroke-width="2" stroke-opacity="0.45"/>
+<circle cx="564.9" cy="104" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"><title>Endgame kiting + depth 0 (c1): screen +11.3</title></circle>
+<circle cx="451.3" cy="104" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"><title>Endgame kiting + depth 0 (c1): validation -0.6 ± 2.0</title></circle>
+<text x="662.0" y="108.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">+11.3 → -0.6</text>
+<text x="256.0" y="138.0" font-size="12" fill="#52514e" text-anchor="end" font-weight="normal">Style HMM, Splitter-HMM (c1, 1.5 s)</text>
+<line x1="556.3" y1="134" x2="343.4" y2="134" stroke="#a3a29c" stroke-width="2"/>
+<line x1="304.2" y1="134" x2="382.5" y2="134" stroke="#2a78d6" stroke-width="2" stroke-opacity="0.45"/>
+<circle cx="556.3" cy="134" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"><title>Style HMM, Splitter-HMM (c1, 1.5 s): screen +10.4</title></circle>
+<circle cx="343.4" cy="134" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"><title>Style HMM, Splitter-HMM (c1, 1.5 s): validation -11.9 ± 4.1</title></circle>
+<text x="662.0" y="138.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">+10.4 → -11.9</text>
+<text x="256.0" y="168.0" font-size="12" fill="#52514e" text-anchor="end" font-weight="normal">Interception (c2)</text>
+<line x1="481.8" y1="164" x2="423.6" y2="164" stroke="#a3a29c" stroke-width="2"/>
+<line x1="382.5" y1="164" x2="464.6" y2="164" stroke="#2a78d6" stroke-width="2" stroke-opacity="0.45"/>
+<circle cx="481.8" cy="164" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"><title>Interception (c2): screen +2.6</title></circle>
+<circle cx="423.6" cy="164" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"><title>Interception (c2): validation -3.5 ± 4.3</title></circle>
+<text x="662.0" y="168.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">+2.6 → -3.5</text>
+<text x="256.0" y="198.0" font-size="12" fill="#52514e" text-anchor="end" font-weight="normal">Group cap 5 (c2)</text>
+<line x1="481.8" y1="194" x2="430.3" y2="194" stroke="#a3a29c" stroke-width="2"/>
+<line x1="394.0" y1="194" x2="466.6" y2="194" stroke="#2a78d6" stroke-width="2" stroke-opacity="0.45"/>
+<circle cx="481.8" cy="194" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"><title>Group cap 5 (c2): screen +2.6</title></circle>
+<circle cx="430.3" cy="194" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"><title>Group cap 5 (c2): validation -2.8 ± 3.8</title></circle>
+<text x="662.0" y="198.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">+2.6 → -2.8</text>
+<text x="256.0" y="228.0" font-size="12" fill="#52514e" text-anchor="end" font-weight="normal">Exact detachment selection (c2)</text>
+<line x1="478.0" y1="224" x2="440.8" y2="224" stroke="#a3a29c" stroke-width="2"/>
+<line x1="404.5" y1="224" x2="477.1" y2="224" stroke="#2a78d6" stroke-width="2" stroke-opacity="0.45"/>
+<circle cx="478.0" cy="224" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"><title>Exact detachment selection (c2): screen +2.2</title></circle>
+<circle cx="440.8" cy="224" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"><title>Exact detachment selection (c2): validation -1.7 ± 3.8</title></circle>
+<text x="662.0" y="228.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">+2.2 → -1.7</text>
+<text x="256.0" y="258.0" font-size="12" fill="#52514e" text-anchor="end" font-weight="normal">Tree reuse + cache (c2)</text>
+<line x1="474.2" y1="254" x2="423.6" y2="254" stroke="#a3a29c" stroke-width="2"/>
+<line x1="382.5" y1="254" x2="464.6" y2="254" stroke="#2a78d6" stroke-width="2" stroke-opacity="0.45"/>
+<circle cx="474.2" cy="254" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"><title>Tree reuse + cache (c2): screen +1.8</title></circle>
+<circle cx="423.6" cy="254" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"><title>Tree reuse + cache (c2): validation -3.5 ± 4.3</title></circle>
+<text x="662.0" y="258.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">+1.8 → -3.5</text>
+<text x="256.0" y="288.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="600">Splitter-R, RaceMCTS merger (c3)</text>
+<line x1="512.4" y1="284" x2="513.3" y2="284" stroke="#a3a29c" stroke-width="2"/>
+<line x1="474.2" y1="284" x2="552.5" y2="284" stroke="#2a78d6" stroke-width="2" stroke-opacity="0.45"/>
+<circle cx="512.4" cy="284" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"><title>Splitter-R, RaceMCTS merger (c3): screen +5.8</title></circle>
+<circle cx="513.3" cy="284" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"><title>Splitter-R, RaceMCTS merger (c3): validation +5.9 ± 4.1</title></circle>
+<text x="662.0" y="288.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">+5.8 → +5.9</text>
+<text x="256.0" y="318.0" font-size="12" fill="#52514e" text-anchor="end" font-weight="normal">Tempo fix keep_away (c4)</text>
+<line x1="584.0" y1="314" x2="470.4" y2="314" stroke="#a3a29c" stroke-width="2"/>
+<line x1="429.3" y1="314" x2="511.4" y2="314" stroke="#2a78d6" stroke-width="2" stroke-opacity="0.45"/>
+<circle cx="584.0" cy="314" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"><title>Tempo fix keep_away (c4): screen +13.3</title></circle>
+<circle cx="470.4" cy="314" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"><title>Tempo fix keep_away (c4): validation +1.4 ± 4.3</title></circle>
+<text x="662.0" y="318.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">+13.3 → +1.4</text>
+<text x="256.0" y="348.0" font-size="12" fill="#52514e" text-anchor="end" font-weight="normal">Safer race root plans (c4)</text>
+<line x1="576.4" y1="344" x2="470.4" y2="344" stroke="#a3a29c" stroke-width="2"/>
+<line x1="429.3" y1="344" x2="511.4" y2="344" stroke="#2a78d6" stroke-width="2" stroke-opacity="0.45"/>
+<circle cx="576.4" cy="344" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"><title>Safer race root plans (c4): screen +12.5</title></circle>
+<circle cx="470.4" cy="344" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"><title>Safer race root plans (c4): validation +1.4 ± 4.3</title></circle>
+<text x="662.0" y="348.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">+12.5 → +1.4</text>
+<text x="256.0" y="378.0" font-size="12" fill="#52514e" text-anchor="end" font-weight="normal">Desperate opponent, backup (c4)</text>
+<line x1="473.2" y1="374" x2="466.6" y2="374" stroke="#a3a29c" stroke-width="2"/>
+<line x1="430.3" y1="374" x2="502.8" y2="374" stroke="#2a78d6" stroke-width="2" stroke-opacity="0.45"/>
+<circle cx="473.2" cy="374" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"><title>Desperate opponent, backup (c4): screen +1.7</title></circle>
+<circle cx="466.6" cy="374" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"><title>Desperate opponent, backup (c4): validation +1.0 ± 3.8</title></circle>
+<text x="662.0" y="378.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">+1.7 → +1.0</text>
+<text x="16.0" y="458.0" font-size="11" fill="#8a8984" text-anchor="start" font-weight="normal">Bold = adopted. The two c4 fixes were validated together. Blue band = ± 1 SE of the validation.</text>
+</svg>

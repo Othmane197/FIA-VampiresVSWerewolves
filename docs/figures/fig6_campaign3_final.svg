@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="262" viewBox="0 0 760 262" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+<title id="t">Campaign 3 final: the merger wins on fresh maps</title><desc id="d">Score over 144 games each: fresh maps, the live teammate bots and never-used styles, 1.5 s</desc>
+<rect width="760" height="262" fill="#fcfcfb"/>
+<text x="16.0" y="28.0" font-size="16" fill="#0b0b0b" text-anchor="start" font-weight="600">Campaign 3 final: the merger wins on fresh maps</text>
+<text x="16.0" y="48.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">Score over 144 games each: fresh maps, the live teammate bots and never-used styles, 1.5 s</text>
+<line x1="166.0" y1="86" x2="166.0" y2="210" stroke="#e4e3df" stroke-width="1"/>
+<text x="166.0" y="226.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">0%</text>
+<line x1="270.8" y1="86" x2="270.8" y2="210" stroke="#e4e3df" stroke-width="1"/>
+<text x="270.8" y="226.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">20%</text>
+<line x1="375.6" y1="86" x2="375.6" y2="210" stroke="#e4e3df" stroke-width="1"/>
+<text x="375.6" y="226.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">40%</text>
+<line x1="480.4" y1="86" x2="480.4" y2="210" stroke="#e4e3df" stroke-width="1"/>
+<text x="480.4" y="226.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">60%</text>
+<line x1="585.2" y1="86" x2="585.2" y2="210" stroke="#e4e3df" stroke-width="1"/>
+<text x="585.2" y="226.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">80%</text>
+<line x1="690.0" y1="86" x2="690.0" y2="210" stroke="#e4e3df" stroke-width="1"/>
+<text x="690.0" y="226.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">100%</text>
+<text x="156.0" y="103.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">Classic flagship</text>
+<path d="M166.0,92.0 H502.1 Q506.1,92.0 506.1,96.0 V102.0 Q506.1,106.0 502.1,106.0 H166.0 Z" fill="#2a78d6"><title>Classic flagship, Score: 64.9% ± 4.0</title></path>
+<line x1="485.1" y1="99.0" x2="527.0" y2="99.0" stroke="#0b0b0b" stroke-width="1.5"/>
+<text x="532.0" y="103.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">64.9% ± 4.0</text>
+<text x="156.0" y="131.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">Calibrated (backup)</text>
+<path d="M166.0,120.0 H502.1 Q506.1,120.0 506.1,124.0 V130.0 Q506.1,134.0 502.1,134.0 H166.0 Z" fill="#2a78d6"><title>Calibrated (backup), Score: 64.9% ± 4.0</title></path>
+<line x1="485.1" y1="127.0" x2="527.0" y2="127.0" stroke="#0b0b0b" stroke-width="1.5"/>
+<text x="532.0" y="131.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">64.9% ± 4.0</text>
+<text x="156.0" y="159.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">Splitter-R</text>
+<path d="M166.0,148.0 H533.0 Q537.0,148.0 537.0,152.0 V158.0 Q537.0,162.0 533.0,162.0 H166.0 Z" fill="#2a78d6"><title>Splitter-R, Score: 70.8% ± 3.8</title></path>
+<line x1="517.1" y1="155.0" x2="556.9" y2="155.0" stroke="#0b0b0b" stroke-width="1.5"/>
+<text x="561.9" y="159.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">70.8% ± 3.8</text>
+<text x="156.0" y="187.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">Splitter-R3</text>
+<path d="M166.0,176.0 H544.0 Q548.0,176.0 548.0,180.0 V186.0 Q548.0,190.0 544.0,190.0 H166.0 Z" fill="#2a78d6"><title>Splitter-R3, Score: 72.9% ± 3.7</title></path>
+<line x1="528.6" y1="183.0" x2="567.4" y2="183.0" stroke="#0b0b0b" stroke-width="1.5"/>
+<text x="572.4" y="187.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">72.9% ± 3.7</text>
+<line x1="166" y1="86" x2="166" y2="194" stroke="#52514e" stroke-width="1"/>
+<text x="16.0" y="252.0" font-size="11" fill="#8a8984" text-anchor="start" font-weight="normal">Paired with the flagship: Calibrated 0.0 ± 3.1, Splitter-R +5.9 ± 4.1, Splitter-R3 +8.0 ± 3.9 (2.05 SE: adopted).</text>
+</svg>

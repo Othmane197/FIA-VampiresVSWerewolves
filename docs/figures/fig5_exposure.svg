@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="326" viewBox="0 0 760 326" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+<title id="t">Iteration 3 of campaign 3: how Splitter-R lost</title><desc id="d">Share of our moves that leave a group next to an enemy that beats it with these odds</desc>
+<rect width="760" height="326" fill="#fcfcfb"/>
+<text x="16.0" y="28.0" font-size="16" fill="#0b0b0b" text-anchor="start" font-weight="600">Iteration 3 of campaign 3: how Splitter-R lost</text>
+<text x="16.0" y="48.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">Share of our moves that leave a group next to an enemy that beats it with these odds</text>
+<rect x="16" y="65" width="12" height="12" rx="3" fill="#a3a29c"/>
+<text x="34.0" y="75.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">Classic flagship (5,057 moves)</text>
+<rect x="256" y="65" width="12" height="12" rx="3" fill="#eb6834"/>
+<text x="274.0" y="75.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">Splitter-R (2,545 moves)</text>
+<line x1="106.0" y1="86" x2="106.0" y2="274" stroke="#e4e3df" stroke-width="1"/>
+<text x="106.0" y="290.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">0%</text>
+<line x1="222.8" y1="86" x2="222.8" y2="274" stroke="#e4e3df" stroke-width="1"/>
+<text x="222.8" y="290.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">2%</text>
+<line x1="339.6" y1="86" x2="339.6" y2="274" stroke="#e4e3df" stroke-width="1"/>
+<text x="339.6" y="290.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">4%</text>
+<line x1="456.4" y1="86" x2="456.4" y2="274" stroke="#e4e3df" stroke-width="1"/>
+<text x="456.4" y="290.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">6%</text>
+<line x1="573.2" y1="86" x2="573.2" y2="274" stroke="#e4e3df" stroke-width="1"/>
+<text x="573.2" y="290.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">8%</text>
+<line x1="690.0" y1="86" x2="690.0" y2="274" stroke="#e4e3df" stroke-width="1"/>
+<text x="690.0" y="290.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">10%</text>
+<text x="96.0" y="111.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">Sure kill</text>
+<path d="M106.0,92.0 H137.0 Q141.0,92.0 141.0,96.0 V102.0 Q141.0,106.0 137.0,106.0 H106.0 Z" fill="#a3a29c"><title>Sure kill, Classic flagship (5,057 moves): 0.6%</title></path>
+<text x="146.0" y="103.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">0.6%</text>
+<path d="M106.0,108.0 H259.7 Q263.7,108.0 263.7,112.0 V118.0 Q263.7,122.0 259.7,122.0 H106.0 Z" fill="#eb6834"><title>Sure kill, Splitter-R (2,545 moves): 2.7%</title></path>
+<text x="268.7" y="119.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">2.7%</text>
+<text x="96.0" y="155.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">50–99%</text>
+<path d="M106.0,136.0 H113.7 Q117.7,136.0 117.7,140.0 V146.0 Q117.7,150.0 113.7,150.0 H106.0 Z" fill="#a3a29c"><title>50–99%, Classic flagship (5,057 moves): 0.2%</title></path>
+<text x="122.7" y="147.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">0.2%</text>
+<path d="M106.0,152.0 H592.6 Q596.6,152.0 596.6,156.0 V162.0 Q596.6,166.0 592.6,166.0 H106.0 Z" fill="#eb6834"><title>50–99%, Splitter-R (2,545 moves): 8.4%</title></path>
+<text x="601.6" y="163.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">8.4%</text>
+<text x="96.0" y="199.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">30–49%</text>
+<path d="M106.0,180.0 H137.0 Q141.0,180.0 141.0,184.0 V190.0 Q141.0,194.0 137.0,194.0 H106.0 Z" fill="#a3a29c"><title>30–49%, Classic flagship (5,057 moves): 0.6%</title></path>
+<text x="146.0" y="191.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">0.6%</text>
+<path d="M106.0,196.0 H218.8 Q222.8,196.0 222.8,200.0 V206.0 Q222.8,210.0 218.8,210.0 H106.0 Z" fill="#eb6834"><title>30–49%, Splitter-R (2,545 moves): 2%</title></path>
+<text x="227.8" y="207.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">2%</text>
+<text x="96.0" y="243.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">1–29%</text>
+<path d="M106.0,224.0 H189.6 Q193.6,224.0 193.6,228.0 V234.0 Q193.6,238.0 189.6,238.0 H106.0 Z" fill="#a3a29c"><title>1–29%, Classic flagship (5,057 moves): 1.5%</title></path>
+<text x="198.6" y="235.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">1.5%</text>
+<path d="M106.0,240.0 H376.5 Q380.5,240.0 380.5,244.0 V250.0 Q380.5,254.0 376.5,254.0 H106.0 Z" fill="#eb6834"><title>1–29%, Splitter-R (2,545 moves): 4.7%</title></path>
+<text x="385.5" y="251.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">4.7%</text>
+<line x1="106" y1="86" x2="106" y2="258" stroke="#52514e" stroke-width="1"/>
+<text x="16.0" y="316.0" font-size="11" fill="#8a8984" text-anchor="start" font-weight="normal">From the logs of games not won (stage 2). The fix: good-odds strikes and the desperate-opponent model (Splitter-R3).</text>
+</svg>

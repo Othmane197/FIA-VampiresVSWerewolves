@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="338" viewBox="0 0 760 338" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+<title id="t">Flagship against backup on four untouched map families</title><desc id="d">Each family was used once, for one validation; pooled with inverse-variance weights</desc>
+<rect width="760" height="338" fill="#fcfcfb"/>
+<text x="16.0" y="28.0" font-size="16" fill="#0b0b0b" text-anchor="start" font-weight="600">Flagship against backup on four untouched map families</text>
+<text x="16.0" y="48.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">Each family was used once, for one validation; pooled with inverse-variance weights</text>
+<line x1="276.0" y1="62" x2="276.0" y2="274" stroke="#e4e3df" stroke-width="1"/>
+<text x="276.0" y="290.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">-10</text>
+<line x1="344.0" y1="62" x2="344.0" y2="274" stroke="#e4e3df" stroke-width="1"/>
+<text x="344.0" y="290.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">-5</text>
+<line x1="412.0" y1="62" x2="412.0" y2="274" stroke="#52514e" stroke-width="1.5"/>
+<text x="412.0" y="290.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">0</text>
+<line x1="480.0" y1="62" x2="480.0" y2="274" stroke="#e4e3df" stroke-width="1"/>
+<text x="480.0" y="290.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">+5</text>
+<line x1="548.0" y1="62" x2="548.0" y2="274" stroke="#e4e3df" stroke-width="1"/>
+<text x="548.0" y="290.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">+10</text>
+<line x1="616.0" y1="62" x2="616.0" y2="274" stroke="#e4e3df" stroke-width="1"/>
+<text x="616.0" y="290.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">+15</text>
+<line x1="684.0" y1="62" x2="684.0" y2="274" stroke="#e4e3df" stroke-width="1"/>
+<text x="684.0" y="290.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">+20</text>
+<text x="480.0" y="308.0" font-size="11" fill="#8a8984" text-anchor="middle" font-weight="normal">Flagship minus backup (points of win rate, ± 1 SE)</text>
+<text x="266.0" y="84.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">Campaign 3 final (fresh)</text>
+<line x1="467.8" y1="80" x2="573.8" y2="80" stroke="#2a78d6" stroke-width="2"/>
+<circle cx="520.8" cy="80" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"><title>Campaign 3 final (fresh): +8.0 ± 3.9</title></circle>
+<text x="692.0" y="84.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">+8.0 ± 3.9</text>
+<text x="266.0" y="114.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">Campaign 4 validation (fresh2)</text>
+<line x1="467.8" y1="110" x2="601.0" y2="110" stroke="#2a78d6" stroke-width="2"/>
+<circle cx="534.4" cy="110" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"><title>Campaign 4 validation (fresh2): +9.0 ± 4.9</title></circle>
+<text x="692.0" y="114.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">+9.0 ± 4.9</text>
+<text x="266.0" y="144.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">Campaign 5 ladder (fresh4)</text>
+<line x1="429.7" y1="140" x2="538.5" y2="140" stroke="#2a78d6" stroke-width="2"/>
+<circle cx="484.1" cy="140" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"><title>Campaign 5 ladder (fresh4): +5.3 ± 4.0</title></circle>
+<text x="692.0" y="144.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">+5.3 ± 4.0</text>
+<text x="266.0" y="174.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">Campaign 6 validation (fresh3)</text>
+<line x1="497.7" y1="170" x2="622.8" y2="170" stroke="#2a78d6" stroke-width="2"/>
+<circle cx="560.2" cy="170" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"><title>Campaign 6 validation (fresh3): +10.9 ± 4.6</title></circle>
+<text x="692.0" y="174.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">+10.9 ± 4.6</text>
+<text x="266.0" y="204.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="600">Pooled, all opponents</text>
+<line x1="492.2" y1="200" x2="549.4" y2="200" stroke="#0b0b0b" stroke-width="2"/>
+<path d="M520.8,193 L527.8,200 L520.8,207 L513.8,200 Z" fill="#0b0b0b"><title>Pooled, all opponents: +8.0 ± 2.1</title></path>
+<text x="692.0" y="204.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">+8.0 ± 2.1</text>
+<text x="266.0" y="234.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">Pooled, live teammate bots only</text>
+<line x1="379.4" y1="230" x2="474.6" y2="230" stroke="#1baf7a" stroke-width="2"/>
+<circle cx="427.0" cy="230" r="5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"><title>Pooled, live teammate bots only: +1.1 ± 3.5</title></circle>
+<text x="692.0" y="234.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">+1.1 ± 3.5</text>
+<text x="266.0" y="264.0" font-size="12" fill="#0b0b0b" text-anchor="end" font-weight="normal">Pooled, randomized styles only</text>
+<line x1="545.3" y1="260" x2="616.0" y2="260" stroke="#1baf7a" stroke-width="2"/>
+<circle cx="580.6" cy="260" r="5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"><title>Pooled, randomized styles only: +12.4 ± 2.6</title></circle>
+<text x="692.0" y="264.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">+12.4 ± 2.6</text>
+</svg>
